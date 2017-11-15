@@ -305,7 +305,7 @@ public:
 
         m_pMD = pMD;    // For debugging and profiling, so they can identify the target
 
-        m_code.Encode((BYTE*)TheUMThunkPreStub(), this);
+        m_pCode->Encode((BYTE*)TheUMThunkPreStub(), this);
 
 #ifdef _DEBUG
         m_state = kLoadTimeInited;
@@ -345,7 +345,7 @@ public:
         if (m_pObjectHandle == NULL && m_pManagedTarget == NULL)
             m_pManagedTarget = m_pMD->GetMultiCallableAddrOfCode();
 
-        m_code.Encode((BYTE*)m_pUMThunkMarshInfo->GetExecStubEntryPoint(), this);
+        m_pCode->Encode((BYTE*)m_pUMThunkMarshInfo->GetExecStubEntryPoint(), this);
 
 #ifdef _DEBUG
         m_state = kRunTimeInited;
@@ -449,15 +449,8 @@ public:
         }
         CONTRACT_END;
 
-        RETURN m_code.GetEntryPoint();
+        RETURN m_pCode->GetEntryPoint();
     }
-
-    static UMEntryThunk* RecoverUMEntryThunk(const VOID* pCode)
-    {
-        LIMITED_METHOD_CONTRACT;
-        return (UMEntryThunk*)( ((LPBYTE)pCode) - offsetof(UMEntryThunk, m_code) );
-    }
-
 
     MethodDesc* GetMethod() const
     {
@@ -494,12 +487,6 @@ public:
         return offsetof(class UMEntryThunk, m_pMD);
     }
 
-    static DWORD GetCodeOffset()
-    {
-        LIMITED_METHOD_CONTRACT;
-        return offsetof(UMEntryThunk, m_code);
-    }
-
     static UMEntryThunk* Decode(LPVOID pCallback);
 
 #ifdef MDA_SUPPORTED
@@ -532,7 +519,7 @@ private:
     DWORD                   m_state;        // the initialization state
 #endif
 
-    UMEntryThunkCode        m_code;
+    UMEntryThunkCode*       m_pCode;
 };
 
 // Cache to hold UMEntryThunk/UMThunkMarshInfo instances associated with MethodDescs.
