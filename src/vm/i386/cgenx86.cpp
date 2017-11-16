@@ -1044,12 +1044,14 @@ Stub *GenerateUMThunkPrestub()
     // call UMEntryThunk::DoRunTimeInit
     psl->X86EmitCall(psl->NewExternalCodeLabel((LPVOID)UMEntryThunk::DoRunTimeInit), 4);
 
-    // mov ecx, [esi+UMThkCallFrame.pUMEntryThunk]
+    // mov eax, [esi+UMThkCallFrame.pUMEntryThunk]
     psl->X86EmitIndexRegLoad(kEAX, kESI, UMThkCallFrame::GetOffsetOfUMEntryThunk());
 
-    //    lea eax, [eax + UMEntryThunk.m_code]  // point to fixedup UMEntryThunk
-    psl->X86EmitOp(0x8d, kEAX, kEAX, 
-                   UMEntryThunk::GetCodeOffset() + UMEntryThunkCode::GetEntryPointOffset());
+    // mov eax, [eax+UMEntryThunk.m_pCode]
+    psl->X86EmitIndexRegLoad(kEAX, kEAX, UMEntryThunk::GetCodePtrOffset());
+
+    // lea eax, [eax + UMEntryThunkCode::<entry point>]  // point to fixedup UMEntryThunk
+    psl->X86EmitOp(0x8d, kEAX, kEAX, UMEntryThunkCode::GetEntryPointOffset());
 
     psl->EmitComMethodStubEpilog(UMThkCallFrame::GetMethodFrameVPtr(), rgRareLabels, rgRejoinLabels, FALSE /*Don't profile*/);
 

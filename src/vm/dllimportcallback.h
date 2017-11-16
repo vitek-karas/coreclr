@@ -487,6 +487,12 @@ public:
         return offsetof(class UMEntryThunk, m_pMD);
     }
 
+    static DWORD GetCodePtrOffset()
+    {
+        LIMITED_METHOD_CONTRACT;
+        return offsetof(UMEntryThunk, m_pCode);
+    }
+
     static UMEntryThunk* Decode(LPVOID pCallback);
 
 #ifdef MDA_SUPPORTED
