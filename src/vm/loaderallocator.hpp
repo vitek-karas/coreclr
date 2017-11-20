@@ -86,7 +86,7 @@ protected:
     PTR_LoaderHeap      m_pHighFrequencyHeap;
     PTR_LoaderHeap      m_pStubHeap; // stubs for PInvoke, remoting, etc
     PTR_CodeFragmentHeap m_pPrecodeHeap;
-    PTR_LoaderHeap      m_pExecutableHeap;
+    PTR_CodeAllocatorLoaderHeap      m_pExecutableHeap;
 #ifdef FEATURE_READYTORUN
     PTR_CodeFragmentHeap m_pDynamicHelpersHeap;
 #endif
@@ -330,7 +330,7 @@ public:
 
     // The executable heap is intended to only be used by the global loader allocator.
     // It refers to executable memory that is not associated with a rangelist.
-    PTR_LoaderHeap GetExecutableHeap()
+    PTR_CodeAllocatorLoaderHeap GetExecutableHeap()
     {
         LIMITED_METHOD_CONTRACT;
         return m_pExecutableHeap;

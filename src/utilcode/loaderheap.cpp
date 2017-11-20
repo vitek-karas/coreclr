@@ -2280,3 +2280,41 @@ void AllocMemTracker::SuppressRelease()
 }
 
 #endif //#ifndef DACCESS_COMPILE
+
+#ifndef DACCESS_COMPILE
+TaggedMemAllocPtr CodeAllocatorLoaderHeap::RealAllocWritableCode(
+    S_SIZE_T dwSize,
+    size_t dwAlign
+#ifdef _DEBUG
+    , __in __in_z const char *szFile
+    , int  lineNum
+#endif
+    )
+{
+    WRAPPER_NO_CONTRACT;
+
+    return RealAllocAlignedMem(dwSize.Value(), dwAlign COMMA_INDEBUG(szFile) COMMA_INDEBUG(lineNum));
+}
+
+TADDR CodeAllocatorLoaderHeap::RealInstallCode(
+    TADDR pWritableCode,
+    S_SIZE_T dwSize, size_t dwAlign
+#ifdef _DEBUG
+    , __in __in_z const char *szFile
+    , int  lineNum
+#endif
+    )
+{
+    return pWritableCode;
+}
+
+void CodeAllocatorLoaderHeap::ApplyCodePatch(
+    TADDR pTargetExecutableCode,
+    TADDR pPatch,
+    S_SIZE_T dwSize)
+{
+    size_t size = dwSize.Value();
+    memcpy_s((void *)pTargetExecutableCode, size, (void *)pPatch, size);
+}
+
+#endif

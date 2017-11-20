@@ -490,6 +490,7 @@ public:
 
 #endif // DACCESS_COMPILE
 
+public:
     virtual ~LoaderHeap()
     {
         WRAPPER_NO_CONTRACT;
@@ -764,7 +765,113 @@ public:
 
 };
 
+interface ICodeAllocator
+{
+public:
+#ifdef DEBUG
+#define AllocWritableCode(dwSize, dwAlign) RealAllocWritableCode((dwSize), (dwAlign), __FILE__, __LINE__)
+#define InstallCode(pWritableCode, dwSize, dwAlign) RealInstallCode((pWritableCode), (dwSize), (dwAlign), __FILE__, __LINE__)
+#else
+#define AllocWritableCode(dwSize, dwAlign) RealAllocWritableCode((dwSize), (dwAlign))
+#define InstallCode(pWritableCode, dwSize, dwAlign) RealInstallCode((pWritableCode), (dwSize), (dwAlign))
+#endif
+    TaggedMemAllocPtr RealAllocWritableCode(
+        S_SIZE_T dwSize,
+        size_t dwAlign
+#ifdef _DEBUG
+        , __in __in_z const char *szFile
+        , int  lineNum
+#endif
+    );
+    TADDR RealInstallCode(
+        TADDR pWritableCode,
+        S_SIZE_T dwSize,
+        size_t dwAlign
+#ifdef _DEBUG
+        , __in __in_z const char *szFile
+        , int  lineNum
+#endif
+    );
+    void ApplyCodePatch(
+        TADDR pTargetExecutableCode,
+        TADDR pPatch,
+        S_SIZE_T dwSize
+    );
+};
 
+typedef DPTR(class CodeAllocatorLoaderHeap) PTR_CodeAllocatorLoaderHeap;
+class CodeAllocatorLoaderHeap : public LoaderHeap, public ICodeAllocator
+{
+#ifndef DACCESS_COMPILE
+public:
+    CodeAllocatorLoaderHeap(DWORD dwReserveBlockSize,
+                            DWORD dwCommitBlockSize,
+                            size_t *pPrivatePerfCounter_LoaderBytes = NULL,
+                            RangeList *pRangeList = NULL,
+                            BOOL fMakeExecutable = FALSE,
+                            BOOL fZeroInit = TRUE
+    )
+        : LoaderHeap(dwReserveBlockSize,
+            dwCommitBlockSize,
+            pPrivatePerfCounter_LoaderBytes,
+            pRangeList,
+            fMakeExecutable,
+            fZeroInit)
+    {
+        WRAPPER_NO_CONTRACT;
+    }
+
+    CodeAllocatorLoaderHeap(DWORD dwReserveBlockSize,
+                            DWORD dwCommitBlockSize,
+                            const BYTE* dwReservedRegionAddress,
+                            SIZE_T dwReservedRegionSize,
+                            size_t *pPrivatePerfCounter_LoaderBytes = NULL,
+                            RangeList *pRangeList = NULL,
+                            BOOL fMakeExecutable = FALSE,
+                            BOOL fZeroInit = TRUE
+    )
+        : LoaderHeap(dwReserveBlockSize,
+            dwCommitBlockSize,
+            dwReservedRegionAddress,
+            dwReservedRegionSize,
+            pPrivatePerfCounter_LoaderBytes,
+            pRangeList,
+            fMakeExecutable,
+            fZeroInit)
+    {
+        WRAPPER_NO_CONTRACT;
+    }
+#endif // DACCESS_COMPILE
+
+public:
+    virtual ~CodeAllocatorLoaderHeap()
+    {
+        WRAPPER_NO_CONTRACT;
+    }
+
+    virtual TaggedMemAllocPtr RealAllocWritableCode(
+        S_SIZE_T dwSize,
+        size_t dwAlign
+#ifdef _DEBUG
+        , __in __in_z const char *szFile
+        , int  lineNum
+#endif
+    );
+    virtual TADDR RealInstallCode(
+        TADDR pWritableCode,
+        S_SIZE_T dwSize,
+        size_t dwAlign
+#ifdef _DEBUG
+        , __in __in_z const char *szFile
+        , int  lineNum
+#endif
+    );
+    virtual void ApplyCodePatch(
+        TADDR pTargetExecutableCode,
+        TADDR pPatch,
+        S_SIZE_T dwSize
+    );
+};
 
 
 

@@ -306,6 +306,10 @@ public:
         m_pMD = pMD;    // For debugging and profiling, so they can identify the target
 
         m_pCode->Encode((BYTE*)TheUMThunkPreStub(), this);
+        m_pCode = (UMEntryThunkCode *)SystemDomain::GetGlobalLoaderAllocator()->GetExecutableHeap()->InstallCode(
+            (TADDR)m_pCode,
+            S_SIZE_T(sizeof(UMEntryThunkCode)),
+            CODE_SIZE_ALIGN);
 
 #ifdef _DEBUG
         m_state = kLoadTimeInited;
@@ -345,7 +349,12 @@ public:
         if (m_pObjectHandle == NULL && m_pManagedTarget == NULL)
             m_pManagedTarget = m_pMD->GetMultiCallableAddrOfCode();
 
-        m_pCode->Encode((BYTE*)m_pUMThunkMarshInfo->GetExecStubEntryPoint(), this);
+        UMEntryThunkCode newCode;
+        newCode.Encode((BYTE*)m_pUMThunkMarshInfo->GetExecStubEntryPoint(), this);
+        SystemDomain::GetGlobalLoaderAllocator()->GetExecutableHeap()->ApplyCodePatch(
+            (TADDR)m_pCode,
+            (TADDR)&newCode,
+            S_SIZE_T(sizeof(UMEntryThunkCode)));
 
 #ifdef _DEBUG
         m_state = kRunTimeInited;

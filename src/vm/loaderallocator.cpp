@@ -999,7 +999,7 @@ void LoaderAllocator::Init(BaseDomain *pDomain, BYTE *pExecutableHeapMemory)
     {
         _ASSERTE(!IsCollectible());
 
-        m_pExecutableHeap = new (pExecutableHeapMemory) LoaderHeap(STUB_HEAP_RESERVE_SIZE,
+        m_pExecutableHeap = new (pExecutableHeapMemory) CodeAllocatorLoaderHeap(STUB_HEAP_RESERVE_SIZE,
                                                                       STUB_HEAP_COMMIT_SIZE,
                                                                       initReservedMem,
                                                                       dwExecutableHeapReserveSize,

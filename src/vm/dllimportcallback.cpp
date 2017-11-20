@@ -1113,7 +1113,10 @@ UMEntryThunk* UMEntryThunk::CreateUMEntryThunk()
 
     // On the phone, use loader heap to save memory commit of regular executable heap
     p = (UMEntryThunk *)(void *)SystemDomain::GetGlobalLoaderAllocator()->GetHighFrequencyHeap()->AllocMem(S_SIZE_T(sizeof(UMEntryThunk)));
-    UMEntryThunkCode* pCode = (UMEntryThunkCode *)(void *)SystemDomain::GetGlobalLoaderAllocator()->GetExecutableHeap()->AllocMem(S_SIZE_T(sizeof(UMEntryThunkCode)));
+    UMEntryThunkCode* pCode = 
+        (UMEntryThunkCode *)(void *)SystemDomain::GetGlobalLoaderAllocator()->GetExecutableHeap()->AllocWritableCode(
+            S_SIZE_T(sizeof(UMEntryThunkCode)),
+            CODE_SIZE_ALIGN);
     p->m_pCode = pCode;
 
     RETURN p;
