@@ -2282,6 +2282,37 @@ void AllocMemTracker::SuppressRelease()
 #endif //#ifndef DACCESS_COMPILE
 
 #ifndef DACCESS_COMPILE
+void CodeAllocatorLoaderHeap::InitializeMapping()
+{
+    m_dwMappingSize = 0xFFFF;
+
+    m_mappingFileHandle = WszCreateFileMapping(
+        INVALID_HANDLE_VALUE,
+        NULL,
+        PAGE_EXECUTE_READWRITE | SEC_RESERVE,
+        0,
+        (DWORD)m_dwMappingSize,
+        NULL);
+
+     m_pWritableBase = MapViewOfFile(
+         m_mappingFileHandle,
+         FILE_MAP_READ | FILE_MAP_WRITE,
+         0,
+         0,
+         (DWORD)m_dwMappingSize);
+     ClrVirtualAlloc(m_pWritableBase, m_dwMappingSize, MEM_COMMIT, PAGE_READWRITE);
+
+     m_pExecutableBase = MapViewOfFile(
+         m_mappingFileHandle,
+         FILE_MAP_READ | FILE_MAP_EXECUTE,
+         0,
+         0,
+         (DWORD)m_dwMappingSize);
+     ClrVirtualAlloc(m_pExecutableBase, m_dwMappingSize, MEM_COMMIT, PAGE_EXECUTE_READ);
+
+     m_dwUsed = 0;
+}
+
 TaggedMemAllocPtr CodeAllocatorLoaderHeap::RealAllocWritableCode(
     S_SIZE_T dwSize,
     size_t dwAlign
@@ -2293,7 +2324,24 @@ TaggedMemAllocPtr CodeAllocatorLoaderHeap::RealAllocWritableCode(
 {
     WRAPPER_NO_CONTRACT;
 
-    return RealAllocAlignedMem(dwSize.Value(), dwAlign COMMA_INDEBUG(szFile) COMMA_INDEBUG(lineNum));
+    if (dwSize.IsOverflow()) ThrowOutOfMemory();
+    size_t size = dwSize.Value();
+
+    size_t offset = ALIGN_UP(m_dwUsed, dwAlign);
+    LPVOID pWritable = (BYTE *)m_pWritableBase + offset;
+    m_dwUsed = offset + size;
+
+    TaggedMemAllocPtr tmap;
+    tmap.m_pMem = pWritable;
+    tmap.m_dwRequestedSize = dwSize.Value();
+    tmap.m_pHeap = this;
+    tmap.m_dwExtra = size - dwSize.Value();
+#ifdef _DEBUG
+    tmap.m_szFile = szFile;
+    tmap.m_lineNum = lineNum;
+#endif
+
+    return tmap;
 }
 
 TADDR CodeAllocatorLoaderHeap::RealInstallCode(
@@ -2305,7 +2353,15 @@ TADDR CodeAllocatorLoaderHeap::RealInstallCode(
 #endif
     )
 {
-    return pWritableCode;
+    if (dwSize.IsOverflow()) ThrowOutOfMemory();
+    size_t size = dwSize.Value();
+
+    _ASSERTE(pWritableCode >= (TADDR)m_pWritableBase);
+    size_t offset = pWritableCode - (TADDR)m_pWritableBase;
+    _ASSERTE(offset < m_dwUsed);
+
+    TADDR pExecutable = (TADDR)m_pExecutableBase + offset;
+    return pExecutable;
 }
 
 void CodeAllocatorLoaderHeap::ApplyCodePatch(
@@ -2313,8 +2369,14 @@ void CodeAllocatorLoaderHeap::ApplyCodePatch(
     TADDR pPatch,
     S_SIZE_T dwSize)
 {
+    if (dwSize.IsOverflow()) ThrowOutOfMemory();
     size_t size = dwSize.Value();
-    memcpy_s((void *)pTargetExecutableCode, size, (void *)pPatch, size);
+
+    _ASSERTE(pTargetExecutableCode >= (TADDR)m_pWritableBase);
+    size_t offset = pTargetExecutableCode - (TADDR)m_pWritableBase;
+    _ASSERTE(offset < m_dwUsed);
+
+    memcpy_s((BYTE *)m_pWritableBase + offset, size, (void *)pPatch, size);
 }
 
 #endif

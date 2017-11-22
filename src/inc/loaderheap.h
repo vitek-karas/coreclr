@@ -819,6 +819,7 @@ public:
             fZeroInit)
     {
         WRAPPER_NO_CONTRACT;
+        InitializeMapping();
     }
 
     CodeAllocatorLoaderHeap(DWORD dwReserveBlockSize,
@@ -840,6 +841,7 @@ public:
             fZeroInit)
     {
         WRAPPER_NO_CONTRACT;
+        InitializeMapping();
     }
 #endif // DACCESS_COMPILE
 
@@ -871,6 +873,18 @@ public:
         TADDR pPatch,
         S_SIZE_T dwSize
     );
+
+private:
+#ifndef DACCESS_COMPILE
+    void InitializeMapping();
+#endif
+
+private:
+    HANDLE m_mappingFileHandle;
+    LPVOID m_pExecutableBase;
+    LPVOID m_pWritableBase;
+    size_t m_dwUsed;
+    size_t m_dwMappingSize;
 };
 
 

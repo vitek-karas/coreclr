@@ -451,7 +451,7 @@ class GlobalLoaderAllocator : public LoaderAllocator
     VPTR_VTABLE_CLASS(GlobalLoaderAllocator, LoaderAllocator)
     VPTR_UNIQUE(VPTRU_LoaderAllocator+1);
 
-    BYTE                m_ExecutableHeapInstance[sizeof(LoaderHeap)];
+    BYTE                m_ExecutableHeapInstance[sizeof(CodeAllocatorLoaderHeap)];
 
 protected:
     LoaderAllocatorID m_Id;
