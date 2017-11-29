@@ -2412,7 +2412,8 @@ void CodeAllocatorLoaderHeap::ApplyCodePatch(
             // TODO: Assumes the value is an offset (and thus pWritableCode + *pValueToRelocate will not overflow)
             // if we would be to deal with absolute addresses we would need different math here (as the overflow would be possible)
             TADDR pExecutableValue = pPatch + *pValueToRelocate - pExecutableCode;
-            *pValueToRelocate = pExecutableValue;
+            INT_PTR* pWritableValue = (INT_PTR*)(pWritableCode + pRelocations->Records[relocationIndex].RelocationValueOffset);
+            *pWritableValue = pExecutableValue;
         }
     }
 
