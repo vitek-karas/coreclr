@@ -306,10 +306,24 @@ public:
         m_pMD = pMD;    // For debugging and profiling, so they can identify the target
 
         m_pCode->Encode((BYTE*)TheUMThunkPreStub(), this);
+        CodeRelocationRecord relocRecord;
+        relocRecord.RelocationValueOffset = m_pCode->GetCodeRelocationOffset();
+        CodeRelocationList relocList;
+        if (relocRecord.RelocationValueOffset != 0)
+        {
+            relocList.RecordCount = 1;
+            relocList.Records = &relocRecord;
+        }
+        else
+        {
+            relocList.RecordCount = 0;
+        }
+
         m_pCode = (UMEntryThunkCode *)SystemDomain::GetGlobalLoaderAllocator()->GetExecutableHeap()->InstallCode(
             (TADDR)m_pCode,
             S_SIZE_T(sizeof(UMEntryThunkCode)),
-            CODE_SIZE_ALIGN);
+            CODE_SIZE_ALIGN,
+            &relocList);
 
 #ifdef _DEBUG
         m_state = kLoadTimeInited;
@@ -350,11 +364,24 @@ public:
             m_pManagedTarget = m_pMD->GetMultiCallableAddrOfCode();
 
         UMEntryThunkCode newCode;
+        CodeRelocationRecord relocRecord;
+        relocRecord.RelocationValueOffset = newCode.GetCodeRelocationOffset();
+        CodeRelocationList relocList;
+        if (relocRecord.RelocationValueOffset != 0)
+        {
+            relocList.RecordCount = 1;
+            relocList.Records = &relocRecord;
+        }
+        else
+        {
+            relocList.RecordCount = 0;
+        }
         newCode.Encode((BYTE*)m_pUMThunkMarshInfo->GetExecStubEntryPoint(), this);
         SystemDomain::GetGlobalLoaderAllocator()->GetExecutableHeap()->ApplyCodePatch(
             (TADDR)m_pCode,
             (TADDR)&newCode,
-            S_SIZE_T(sizeof(UMEntryThunkCode)));
+            S_SIZE_T(sizeof(UMEntryThunkCode)),
+            &relocList);
 
 #ifdef _DEBUG
         m_state = kRunTimeInited;

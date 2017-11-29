@@ -511,6 +511,11 @@ struct DECLSPEC_ALIGN(4) UMEntryThunkCode
 
         return 2;
     }
+
+    size_t GetCodeRelocationOffset()
+    {
+        return 8;
+    }
 };
 #include <poppack.h>
 

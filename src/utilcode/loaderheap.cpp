@@ -2330,6 +2330,7 @@ TaggedMemAllocPtr CodeAllocatorLoaderHeap::RealAllocWritableCode(
     size_t offset = ALIGN_UP(m_dwUsed, dwAlign);
     LPVOID pWritable = (BYTE *)m_pWritableBase + offset;
     m_dwUsed = offset + size;
+    _ASSERTE(m_dwUsed < m_dwMappingSize);
 
     TaggedMemAllocPtr tmap;
     tmap.m_pMem = pWritable;
@@ -2346,7 +2347,9 @@ TaggedMemAllocPtr CodeAllocatorLoaderHeap::RealAllocWritableCode(
 
 TADDR CodeAllocatorLoaderHeap::RealInstallCode(
     TADDR pWritableCode,
-    S_SIZE_T dwSize, size_t dwAlign
+    S_SIZE_T dwSize,
+    size_t dwAlign,
+    CodeRelocationList* pRelocations
 #ifdef _DEBUG
     , __in __in_z const char *szFile
     , int  lineNum
@@ -2360,23 +2363,60 @@ TADDR CodeAllocatorLoaderHeap::RealInstallCode(
     size_t offset = pWritableCode - (TADDR)m_pWritableBase;
     _ASSERTE(offset < m_dwUsed);
 
-    TADDR pExecutable = (TADDR)m_pExecutableBase + offset;
-    return pExecutable;
+    TADDR pExecutableCode = (TADDR)m_pExecutableBase + offset;
+
+    if (pRelocations != NULL)
+    {
+        for (size_t relocationIndex = 0; relocationIndex < pRelocations->RecordCount; relocationIndex++)
+        {
+            _ASSERTE(pRelocations->Records[relocationIndex].RelocationValueOffset < size);
+            INT_PTR* pValueToRelocate = (INT_PTR *)(pWritableCode + pRelocations->Records[relocationIndex].RelocationValueOffset);
+
+            // TODO: Assumes the value is an offset (and thus pWritableCode + *pValueToRelocate will not overflow)
+            // if we would be to deal with absolute addresses we would need different math here (as the overflow would be possible)
+            TADDR pExecutableValue = pWritableCode + *pValueToRelocate - pExecutableCode;
+            *pValueToRelocate = pExecutableValue;
+        }
+    }
+
+    FlushInstructionCache(GetCurrentProcess(), (LPCVOID)pExecutableCode, size);
+
+    return pExecutableCode;
 }
 
 void CodeAllocatorLoaderHeap::ApplyCodePatch(
     TADDR pTargetExecutableCode,
     TADDR pPatch,
-    S_SIZE_T dwSize)
+    S_SIZE_T dwSize,
+    CodeRelocationList* pRelocations)
 {
     if (dwSize.IsOverflow()) ThrowOutOfMemory();
     size_t size = dwSize.Value();
 
-    _ASSERTE(pTargetExecutableCode >= (TADDR)m_pWritableBase);
-    size_t offset = pTargetExecutableCode - (TADDR)m_pWritableBase;
+    _ASSERTE(pTargetExecutableCode >= (TADDR)m_pExecutableBase);
+    size_t offset = pTargetExecutableCode - (TADDR)m_pExecutableBase;
     _ASSERTE(offset < m_dwUsed);
 
-    memcpy_s((BYTE *)m_pWritableBase + offset, size, (void *)pPatch, size);
+    TADDR pWritableCode = (TADDR)m_pWritableBase + offset;
+
+    memcpy_s((BYTE *)pWritableCode, size, (void *)pPatch, size);
+    TADDR pExecutableCode = (TADDR)m_pExecutableBase + offset;
+
+    if (pRelocations != NULL)
+    {
+        for (size_t relocationIndex = 0; relocationIndex < pRelocations->RecordCount; relocationIndex++)
+        {
+            _ASSERTE(pRelocations->Records[relocationIndex].RelocationValueOffset < size);
+            INT_PTR* pValueToRelocate = (INT_PTR *)(pPatch + pRelocations->Records[relocationIndex].RelocationValueOffset);
+
+            // TODO: Assumes the value is an offset (and thus pWritableCode + *pValueToRelocate will not overflow)
+            // if we would be to deal with absolute addresses we would need different math here (as the overflow would be possible)
+            TADDR pExecutableValue = pPatch + *pValueToRelocate - pExecutableCode;
+            *pValueToRelocate = pExecutableValue;
+        }
+    }
+
+    FlushInstructionCache(GetCurrentProcess(), (LPCVOID)pExecutableCode, size);
 }
 
 #endif

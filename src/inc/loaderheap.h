@@ -765,15 +765,26 @@ public:
 
 };
 
+struct CodeRelocationRecord
+{
+    size_t RelocationValueOffset;
+};
+
+struct CodeRelocationList
+{
+    size_t RecordCount;
+    CodeRelocationRecord *Records;
+};
+
 interface ICodeAllocator
 {
 public:
 #ifdef DEBUG
 #define AllocWritableCode(dwSize, dwAlign) RealAllocWritableCode((dwSize), (dwAlign), __FILE__, __LINE__)
-#define InstallCode(pWritableCode, dwSize, dwAlign) RealInstallCode((pWritableCode), (dwSize), (dwAlign), __FILE__, __LINE__)
+#define InstallCode(pWritableCode, dwSize, dwAlign, pRelocations) RealInstallCode((pWritableCode), (dwSize), (dwAlign), (pRelocations), __FILE__, __LINE__)
 #else
 #define AllocWritableCode(dwSize, dwAlign) RealAllocWritableCode((dwSize), (dwAlign))
-#define InstallCode(pWritableCode, dwSize, dwAlign) RealInstallCode((pWritableCode), (dwSize), (dwAlign))
+#define InstallCode(pWritableCode, dwSize, dwAlign, pRelocations) RealInstallCode((pWritableCode), (dwSize), (dwAlign), (pRelocations))
 #endif
     TaggedMemAllocPtr RealAllocWritableCode(
         S_SIZE_T dwSize,
@@ -786,7 +797,8 @@ public:
     TADDR RealInstallCode(
         TADDR pWritableCode,
         S_SIZE_T dwSize,
-        size_t dwAlign
+        size_t dwAlign,
+        CodeRelocationList* pRelocations
 #ifdef _DEBUG
         , __in __in_z const char *szFile
         , int  lineNum
@@ -795,7 +807,8 @@ public:
     void ApplyCodePatch(
         TADDR pTargetExecutableCode,
         TADDR pPatch,
-        S_SIZE_T dwSize
+        S_SIZE_T dwSize,
+        CodeRelocationList* pRelocations
     );
 };
 
@@ -862,7 +875,8 @@ public:
     virtual TADDR RealInstallCode(
         TADDR pWritableCode,
         S_SIZE_T dwSize,
-        size_t dwAlign
+        size_t dwAlign,
+        CodeRelocationList* pRelocations
 #ifdef _DEBUG
         , __in __in_z const char *szFile
         , int  lineNum
@@ -871,7 +885,8 @@ public:
     virtual void ApplyCodePatch(
         TADDR pTargetExecutableCode,
         TADDR pPatch,
-        S_SIZE_T dwSize
+        S_SIZE_T dwSize,
+        CodeRelocationList* pRelocations
     );
 
 private:
