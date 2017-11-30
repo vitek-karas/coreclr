@@ -892,6 +892,10 @@ public:
 private:
 #ifndef DACCESS_COMPILE
     void InitializeMapping();
+    void ApplyCodeRelocations(
+        TADDR pOriginalCode,
+        size_t dwCodeBlockOffset,
+        CodeRelocationList *pRelocations);
 #endif
 
 private:
