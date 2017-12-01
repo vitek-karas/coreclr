@@ -1127,7 +1127,20 @@ void UMEntryThunk::Terminate()
     WRAPPER_NO_CONTRACT;
 
     _ASSERTE(!SystemDomain::GetGlobalLoaderAllocator()->GetExecutableHeap()->IsZeroInit());
-    m_pCode->Poison();
+
+    // TODO: Do we really need to do this? The reality is that this is only used if there's a failure creating the thunk
+    // or if the entire appdomain is terminated.
+    // In the first case we will backout the memory and the allocator will likely immediately give it to somebody else (and thus overwrite it)
+    // also in this case the address of the code didn't make it anywhere to be called.
+    // In the second case, with the appdomain the code allocator will be deleted as well and thus all its memory will be freed.
+    // Trying to access such memory will AV anyway.
+    UMEntryThunkCode newCode;
+    newCode.Poison();
+    SystemDomain::GetGlobalLoaderAllocator()->GetExecutableHeap()->ApplyCodePatch(
+        (TADDR)m_pCode,
+        (TADDR)&newCode,
+        S_SIZE_T(sizeof(UMEntryThunkCode)),
+        NULL);
 
     SystemDomain::GetGlobalLoaderAllocator()->GetExecutableHeap()->BackoutMem(m_pCode, sizeof(UMEntryThunkCode));
     SystemDomain::GetGlobalLoaderAllocator()->GetHighFrequencyHeap()->BackoutMem(this, sizeof(UMEntryThunk));

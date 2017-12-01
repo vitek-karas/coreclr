@@ -80,6 +80,19 @@ public partial class FunctionPtr
             Console.WriteLine(e);
         }
 
+        try
+        {
+            VoidDelegate del = (VoidDelegate)Marshal.GetDelegateForFunctionPointer(fcnptr, typeof(VoidDelegate));
+            Console.WriteLine(del.Method.ToString());
+            Console.WriteLine("Pass - got a delegate for the function pointer.");
+        }
+        catch (Exception e)
+        {
+            retVal = 0;
+            Console.WriteLine("Failure - receive an incorrect exception while passing a non-delegate type");
+            Console.WriteLine(e);
+        }
+
         Console.WriteLine(retVal == 100 ? "Done - PASSED" : "Done - FAILED");
         return retVal;
     }
