@@ -281,6 +281,11 @@ private:
 public:
     // Space for header is reserved immediately before. It is not included in size.
     virtual void* AllocMemForCode_NoThrow(size_t header, size_t size, DWORD alignment, size_t reserveForJumpStubs) DAC_EMPTY_RET(NULL);
+    virtual TADDR GetExecutableAddress(TADDR writableAddress)
+    {
+        // We don't have a W^X implementation for the HostCodeHeap yet.
+        return writableAddress;
+    }
 
     virtual ~HostCodeHeap() DAC_EMPTY();
 

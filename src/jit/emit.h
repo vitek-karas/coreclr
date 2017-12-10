@@ -1606,6 +1606,8 @@ private:
     BYTE* emitColdCodeBlock; // Cold code block
     BYTE* emitConsBlock;     // Read-only (constant) data block
 
+    BYTE* emitExecutableBlock;
+
     UNATIVE_OFFSET emitTotalHotCodeSize;
     UNATIVE_OFFSET emitTotalColdCodeSize;
 
@@ -1626,6 +1628,13 @@ private:
         }
         noway_assert((UNATIVE_OFFSET)distance == distance);
         return (UNATIVE_OFFSET)distance;
+    }
+
+    BYTE* emitCurExecutableCode(BYTE* dst)
+    {
+        // TODO: What about cold code - should probably never come into play
+        // since W^X allocators will not allocate cold code ever.. but migth be worth an assert or something.
+        return emitExecutableBlock + emitCurCodeOffs(dst);
     }
 
     BYTE* emitOffsetToPtr(UNATIVE_OFFSET offset)

@@ -517,6 +517,8 @@ public:
             void **             roDataBlock     /* OUT */
             ) = 0;
 
+    virtual void * getExecutableAddressForCode(void * code) { return code; }
+
     // Reserve memory for the method/funclet's unwind information.
     // Note that this must be called before allocMem. It should be
     // called once for the main method, once for every funclet, and

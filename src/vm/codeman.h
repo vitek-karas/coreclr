@@ -443,6 +443,11 @@ public:
     // Space for header is reserved immediately before. It is not included in size.
     virtual void* AllocMemForCode_NoThrow(size_t header, size_t size, DWORD alignment, size_t reserveForJumpStubs) = 0;
 
+    // Given the previously allocared code writable address (using the AllocMemForCode_NoThrow) 
+    // this method returns the executable address for that code.
+    // Can return the same value (at least for now).
+    virtual TADDR GetExecutableAddress(TADDR writableAddress) = 0;
+
 #ifdef DACCESS_COMPILE
     virtual void EnumMemoryRegions(CLRDataEnumMemoryFlags flags) = 0;
 #endif
@@ -510,7 +515,13 @@ private:
     ExplicitControlLoaderHeap m_LoaderHeap;
     SSIZE_T m_cbMinNextPad;
 
+    HANDLE m_mappingFileHandle;
+    LPVOID m_pExecutableBase;
+    LPVOID m_pWritableBase;
+    size_t m_dwMappingSize;
+
     LoaderCodeHeap(size_t * pPrivatePCLBytes);
+    void InitializeMapping(size_t mappingSize);
 
 public:
     static HeapList* CreateCodeHeap(CodeHeapRequestInfo *pInfo, LoaderHeap *pJitMetaHeap);
@@ -522,6 +533,7 @@ public:
     }
 
     virtual void* AllocMemForCode_NoThrow(size_t header, size_t size, DWORD alignment, size_t reserveForJumpStubs) DAC_EMPTY_RET(NULL);
+    virtual TADDR GetExecutableAddress(TADDR writableAddress) DAC_EMPTY_RET(NULL);
 
 #ifdef DACCESS_COMPILE
     virtual void EnumMemoryRegions(CLRDataEnumMemoryFlags flags)
@@ -1009,7 +1021,7 @@ public:
 
     BOOL                LoadJIT();
 
-    CodeHeader*         allocCode(MethodDesc* pFD, size_t blockSize, size_t reserveForJumpStubs, CorJitAllocMemFlag flag
+    CodeHeader*         allocCode(MethodDesc* pFD, size_t blockSize, size_t reserveForJumpStubs, CorJitAllocMemFlag flag, CodeHeap** ppCodeHeap
 #ifdef WIN64EXCEPTIONS
                                   , UINT nUnwindInfos
                                   , TADDR * pModuleBase

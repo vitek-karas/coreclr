@@ -67,6 +67,7 @@
 //
 class __SafeToReturn {
 public:
+
     static int safe_to_return() {return 0;};
     static int used() {return 0;};
 };

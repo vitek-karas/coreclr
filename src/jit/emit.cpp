@@ -4542,14 +4542,18 @@ unsigned emitter::emitEndCodeGen(Compiler* comp,
                             (void**)&codeBlock, (void**)&coldCodeBlock, (void**)&consBlock);
 #endif
 
+    emitExecutableBlock = (BYTE *)emitCmpHandle->getExecutableAddressForCode(codeBlock);
+
     // if (emitConsDsc.dsdOffs)
     //     printf("Cons=%08X\n", consBlock);
 
     /* Give the block addresses to the caller and other functions here */
 
-    *codeAddr = emitCodeBlock = codeBlock;
+    emitCodeBlock = codeBlock;
     *coldCodeAddr = emitColdCodeBlock = coldCodeBlock;
     *consAddr = emitConsBlock = consBlock;
+
+    *codeAddr = emitExecutableBlock;
 
     /* Nothing has been pushed on the stack */
     CLANG_FORMAT_COMMENT_ANCHOR;

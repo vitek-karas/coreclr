@@ -11737,7 +11737,7 @@ void CEEJitInfo::allocMem (
         COMPlusThrowHR(CORJIT_OUTOFMEM);
     }
 
-    m_CodeHeader = m_jitManager->allocCode(m_pMethodBeingCompiled, totalSize.Value(), GetReserveForJumpStubs(), flag
+    m_CodeHeader = m_jitManager->allocCode(m_pMethodBeingCompiled, totalSize.Value(), GetReserveForJumpStubs(), flag, &m_CodeHeap
 #ifdef WIN64EXCEPTIONS
                                            , m_totalUnwindInfos
                                            , &m_moduleBase
@@ -11774,6 +11774,11 @@ void CEEJitInfo::allocMem (
 #endif  // _DEBUG
 
     EE_TO_JIT_TRANSITION();
+}
+
+void * CEEJitInfo::getExecutableAddressForCode(void * code)
+{
+    return (void *)m_CodeHeap->GetExecutableAddress((TADDR)code);
 }
 
 /*********************************************************************/
@@ -13596,6 +13601,11 @@ void CEEInfo::allocMem (
 {
     LIMITED_METHOD_CONTRACT;
     UNREACHABLE();      // only called on derived class.
+}
+
+void * CEEInfo::getExecutableAddressForCode(void * code)
+{
+    UNREACHABLE();
 }
 
 void CEEInfo::reserveUnwindInfo (

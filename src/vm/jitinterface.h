@@ -1013,6 +1013,8 @@ public:
             void **             roDataBlock     /* OUT */
             );
 
+    void * getExecutableAddressForCode(void * code);
+
     void reserveUnwindInfo (
             BOOL                isFunclet,             /* IN */
             BOOL                isColdCode,            /* IN */
@@ -1213,6 +1215,7 @@ protected:
 class  EEJitManager;
 struct _hpCodeHdr;
 typedef struct _hpCodeHdr CodeHeader;
+class CodeHeap;
 
 #ifndef CROSSGEN_COMPILE
 // CEEJitInfo is the concrete implementation of callbacks that the EE must provide for the JIT to do its
@@ -1232,6 +1235,8 @@ public:
             void **             coldCodeBlock,  /* OUT */
             void **             roDataBlock     /* OUT */
             );
+
+    void * getExecutableAddressForCode(void * code);
 
     void reserveUnwindInfo(BOOL isFunclet, BOOL isColdCode, ULONG unwindSize);
 
@@ -1474,6 +1479,7 @@ public:
 protected :
     EEJitManager*           m_jitManager;   // responsible for allocating memory
     CodeHeader*             m_CodeHeader;   // descriptor for JITTED code
+    CodeHeap*               m_CodeHeap;     // The heap from which the JITTED code was allocated
     COR_ILMETHOD_DECODER *  m_ILHeader;     // the code header as exist in the file
 #ifdef WIN64EXCEPTIONS
     TADDR                   m_moduleBase;       // Base for unwind Infos

@@ -1908,7 +1908,7 @@ void CodeFragmentHeap::RealBackoutMem(void *pMem
 LoaderCodeHeap::LoaderCodeHeap(size_t * pPrivatePCLBytes)
     : m_LoaderHeap(pPrivatePCLBytes,
                    0,                       // RangeList *pRangeList
-                   TRUE),                   // BOOL fMakeExecutable
+                   FALSE),                   // BOOL fMakeExecutable
     m_cbMinNextPad(0)
 {
     WRAPPER_NO_CONTRACT;
@@ -2077,6 +2077,34 @@ static size_t GetDefaultReserveForJumpStubs(size_t codeHeapSize)
 #endif
 }
 
+void LoaderCodeHeap::InitializeMapping(size_t mappingSize)
+{
+    m_dwMappingSize = mappingSize;
+
+    m_mappingFileHandle = WszCreateFileMapping(
+        INVALID_HANDLE_VALUE,
+        NULL,
+        PAGE_EXECUTE_READWRITE | SEC_RESERVE,
+        0,
+        (DWORD)m_dwMappingSize,
+        NULL);
+
+    m_pWritableBase = MapViewOfFile(
+        m_mappingFileHandle,
+        FILE_MAP_READ | FILE_MAP_WRITE,
+        0,
+        0,
+        (DWORD)m_dwMappingSize);
+
+    m_pExecutableBase = MapViewOfFile(
+        m_mappingFileHandle,
+        FILE_MAP_READ | FILE_MAP_EXECUTE,
+        0,
+        0,
+        (DWORD)m_dwMappingSize);
+    ClrVirtualAlloc(m_pExecutableBase, m_dwMappingSize, MEM_COMMIT, PAGE_EXECUTE_READ);
+}
+
 HeapList* LoaderCodeHeap::CreateCodeHeap(CodeHeapRequestInfo *pInfo, LoaderHeap *pJitMetaHeap)
 {
     CONTRACT(HeapList *) {
@@ -2113,45 +2141,51 @@ HeapList* LoaderCodeHeap::CreateCodeHeap(CodeHeapRequestInfo *pInfo, LoaderHeap 
     DWORD dwSizeAcquiredFromInitialBlock = 0;
     bool fAllocatedFromEmergencyJumpStubReserve = false;
 
-    pBaseAddr = (BYTE *)pInfo->m_pAllocator->GetCodeHeapInitialBlock(loAddr, hiAddr, (DWORD)initialRequestSize, &dwSizeAcquiredFromInitialBlock);
-    if (pBaseAddr != NULL)
-    {
-        pCodeHeap->m_LoaderHeap.SetReservedRegion(pBaseAddr, dwSizeAcquiredFromInitialBlock, FALSE);
-    }
-    else
-    {
-        if (loAddr != NULL || hiAddr != NULL)
-        {
-#ifdef _DEBUG
-            // Always exercise the fallback path in the caller when forced relocs are turned on
-            if (!pInfo->getThrowOnOutOfMemoryWithinRange() && PEDecoder::GetForceRelocs())
-                RETURN NULL;
-#endif
-            pBaseAddr = ClrVirtualAllocWithinRange(loAddr, hiAddr,
-                                                   reserveSize, MEM_RESERVE, PAGE_NOACCESS);
+    pCodeHeap->InitializeMapping(reserveSize);
+    pCodeHeap->m_LoaderHeap.SetReservedRegion((BYTE *)pCodeHeap->m_pWritableBase, reserveSize, FALSE);
 
-            if (!pBaseAddr)
-            {
-                // Conserve emergency jump stub reserve until when it is really needed
-                if (!pInfo->getThrowOnOutOfMemoryWithinRange())
-                    RETURN NULL;
-#ifdef _TARGET_AMD64_
-                pBaseAddr = ExecutionManager::GetEEJitManager()->AllocateFromEmergencyJumpStubReserve(loAddr, hiAddr, &reserveSize);
-                if (!pBaseAddr)
-                    ThrowOutOfMemoryWithinRange();
-                fAllocatedFromEmergencyJumpStubReserve = true;                
-#else
-                ThrowOutOfMemoryWithinRange();
-#endif // _TARGET_AMD64_
-            }
+    if (FALSE)
+    {
+        pBaseAddr = (BYTE *)pInfo->m_pAllocator->GetCodeHeapInitialBlock(loAddr, hiAddr, (DWORD)initialRequestSize, &dwSizeAcquiredFromInitialBlock);
+        if (pBaseAddr != NULL)
+        {
+            pCodeHeap->m_LoaderHeap.SetReservedRegion(pBaseAddr, dwSizeAcquiredFromInitialBlock, FALSE);
         }
         else
         {
-            pBaseAddr = ClrVirtualAllocExecutable(reserveSize, MEM_RESERVE, PAGE_NOACCESS);
-            if (!pBaseAddr)
-                ThrowOutOfMemory();
+            if (loAddr != NULL || hiAddr != NULL)
+            {
+#ifdef _DEBUG
+                // Always exercise the fallback path in the caller when forced relocs are turned on
+                if (!pInfo->getThrowOnOutOfMemoryWithinRange() && PEDecoder::GetForceRelocs())
+                    RETURN NULL;
+#endif
+                pBaseAddr = ClrVirtualAllocWithinRange(loAddr, hiAddr,
+                    reserveSize, MEM_RESERVE, PAGE_NOACCESS);
+
+                if (!pBaseAddr)
+                {
+                    // Conserve emergency jump stub reserve until when it is really needed
+                    if (!pInfo->getThrowOnOutOfMemoryWithinRange())
+                        RETURN NULL;
+#ifdef _TARGET_AMD64_
+                    pBaseAddr = ExecutionManager::GetEEJitManager()->AllocateFromEmergencyJumpStubReserve(loAddr, hiAddr, &reserveSize);
+                    if (!pBaseAddr)
+                        ThrowOutOfMemoryWithinRange();
+                    fAllocatedFromEmergencyJumpStubReserve = true;
+#else
+                    ThrowOutOfMemoryWithinRange();
+#endif // _TARGET_AMD64_
+                }
+            }
+            else
+            {
+                pBaseAddr = ClrVirtualAllocExecutable(reserveSize, MEM_RESERVE, PAGE_NOACCESS);
+                if (!pBaseAddr)
+                    ThrowOutOfMemory();
+            }
+            pCodeHeap->m_LoaderHeap.SetReservedRegion(pBaseAddr, reserveSize, TRUE);
         }
-        pCodeHeap->m_LoaderHeap.SetReservedRegion(pBaseAddr, reserveSize, TRUE);
     }
 
 
@@ -2174,7 +2208,7 @@ HeapList* LoaderCodeHeap::CreateCodeHeap(CodeHeapRequestInfo *pInfo, LoaderHeap 
     // We do not need to memset this memory, since ClrVirtualAlloc() guarantees that the memory is zero.
     // Furthermore, if we avoid writing to it, these pages don't come into our working set
 
-    pHp->mapBase         = ROUND_DOWN_TO_PAGE(pHp->startAddress);  // round down to next lower page align
+    pHp->mapBase         = ROUND_DOWN_TO_PAGE(pCodeHeap->GetExecutableAddress(pHp->startAddress));  // round down to next lower page align
     pHp->pHdrMap         = (DWORD*)(void*)pJitMetaHeap->AllocMem(S_SIZE_T(nibbleMapSize));
 
     LOG((LF_JIT, LL_INFO100,
@@ -2209,6 +2243,14 @@ void * LoaderCodeHeap::AllocMemForCode_NoThrow(size_t header, size_t size, DWORD
 
     return p;
 }
+
+TADDR LoaderCodeHeap::GetExecutableAddress(TADDR writableAddress)
+{
+    _ASSERTE(writableAddress >= (TADDR)m_pWritableBase && writableAddress < ((TADDR)m_pWritableBase + m_dwMappingSize));
+
+    return (TADDR)m_pExecutableBase + (writableAddress - (TADDR)m_pWritableBase);
+}
+
 
 void CodeHeapRequestInfo::Init()
 { 
@@ -2353,8 +2395,8 @@ HeapList* EEJitManager::NewCodeHeap(CodeHeapRequestInfo *pInfo, DomainCodeHeapLi
 
     EX_TRY
     {
-        TADDR pStartRange = (TADDR) pHp;
-        TADDR pEndRange = (TADDR) &((BYTE*)pHp->startAddress)[pHp->maxCodeHeapSize];
+        TADDR pStartRange = pHp->pHeap->GetExecutableAddress((TADDR) pHp);
+        TADDR pEndRange = pHp->pHeap->GetExecutableAddress(pHp->startAddress) +pHp->maxCodeHeapSize;
 
         ExecutionManager::AddCodeRange(pStartRange,
                                        pEndRange,
@@ -2499,7 +2541,7 @@ void* EEJitManager::allocCodeRaw(CodeHeapRequestInfo *pInfo,
     RETURN(mem);
 }
 
-CodeHeader* EEJitManager::allocCode(MethodDesc* pMD, size_t blockSize, size_t reserveForJumpStubs, CorJitAllocMemFlag flag
+CodeHeader* EEJitManager::allocCode(MethodDesc* pMD, size_t blockSize, size_t reserveForJumpStubs, CorJitAllocMemFlag flag, CodeHeap** ppCodeHeap
 #ifdef WIN64EXCEPTIONS
                                     , UINT nUnwindInfos
                                     , TADDR * pModuleBase
@@ -2577,6 +2619,8 @@ CodeHeader* EEJitManager::allocCode(MethodDesc* pMD, size_t blockSize, size_t re
         TADDR pCode = (TADDR) allocCodeRaw(&requestInfo, sizeof(CodeHeader), totalSize, alignment, &pCodeHeap);
 
         _ASSERTE(pCodeHeap);
+        _ASSERTE(ppCodeHeap != NULL);
+        *ppCodeHeap = pCodeHeap->pHeap;
 
         if (pMD->IsLCGMethod())
         {
@@ -2617,7 +2661,7 @@ CodeHeader* EEJitManager::allocCode(MethodDesc* pMD, size_t blockSize, size_t re
         *pModuleBase = (TADDR)pCodeHeap;
 #endif
 
-        NibbleMapSet(pCodeHeap, pCode, TRUE);
+        NibbleMapSet(pCodeHeap, pCodeHeap->pHeap->GetExecutableAddress(pCode), TRUE);
     }
 
     RETURN(pCodeHdr);
@@ -2943,6 +2987,7 @@ void * EEJitManager::allocCodeFragmentBlock(size_t blockSize, unsigned alignment
 
     HeapList *pCodeHeap = NULL;
     CodeHeapRequestInfo    requestInfo(NULL, pLoaderAllocator, NULL, NULL);
+    requestInfo.SetDynamicDomain();
 
 #ifdef _TARGET_AMD64_
     // CodeFragments are pretty much always Precodes that may need to be patched with jump stubs at some point in future
@@ -3711,8 +3756,8 @@ TADDR EEJitManager::FindMethodCode(RangeSection * pRangeSection, PCODE currentPC
 
     HeapList *pHp = dac_cast<PTR_HeapList>(pRangeSection->pHeapListOrZapModule);
 
-    if ((currentPC < pHp->startAddress) ||
-        (currentPC > pHp->endAddress))
+    if ((currentPC < pHp->pHeap->GetExecutableAddress(pHp->startAddress)) ||
+        (currentPC > pHp->pHeap->GetExecutableAddress(pHp->endAddress)))
     {
         return NULL;
     }

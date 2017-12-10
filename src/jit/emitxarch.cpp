@@ -9125,7 +9125,7 @@ BYTE* emitter::emitOutputRR(BYTE* dst, instrDesc* id)
             assert(ins == INS_crc32);
             dst += emitOutputByte(dst, 0x66);
         }
-        else if (size == EA_8BYTE)
+        else if (size == EA_8BYTE) 
         {
             code = AddRexWPrefix(ins, code);
         }
@@ -10045,7 +10045,7 @@ BYTE* emitter::emitOutputLJ(BYTE* dst, instrDesc* i)
     }
     else
     {
-        distVal = (ssize_t)emitOffsetToPtr(dstOffs);
+        distVal = (ssize_t)emitCurExecutableCode(emitOffsetToPtr(dstOffs));
     }
 
     if (dstOffs <= srcOffs)
@@ -10538,7 +10538,7 @@ size_t emitter::emitOutputInstr(insGroup* ig, instrDesc* id, BYTE** dp)
             // Calculate PC relative displacement.
             // Although you think we should be using sizeof(void*), the x86 and x64 instruction set
             // only allow a 32-bit offset, so we correctly use sizeof(INT32)
-            offset = addr - (dst + sizeof(INT32));
+            offset = addr - (emitCurExecutableCode(dst) + sizeof(INT32));
 #endif
 
             dst += emitOutputLong(dst, offset);
