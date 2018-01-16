@@ -363,7 +363,6 @@ void ZapInfo::ProcessReferences()
             hMethod = (CORINFO_METHOD_HANDLE)(((ZapWrapper *)pTarget)->GetHandle());
             break;
 
-        case ZapNodeType_ExternalMethodThunk:
         case ZapNodeType_ExternalMethodCell:
             hMethod = (CORINFO_METHOD_HANDLE)((ZapImport*)pTarget)->GetHandle();
             break;
@@ -720,7 +719,6 @@ COUNT_T ZapImage::MethodCodeTraits::Hash(key_t k)
             switch (type)
             {
             case ZapNodeType_MethodEntryPoint:
-            case ZapNodeType_ExternalMethodThunk:
             case ZapNodeType_ClassHandle:
             case ZapNodeType_Import_ClassHandle:
             case ZapNodeType_MethodHandle:
@@ -1835,13 +1833,14 @@ void ZapInfo::AppendImport(ZapImport * pImport)
 // If we can't use either of these then we return NULL and we will use an 
 // (fixable) indirection cell to perform the call.
 // 
-PVOID ZapInfo::embedDirectCall(CORINFO_METHOD_HANDLE ftn,
+BOOL ZapInfo::embedDirectCall(CORINFO_METHOD_HANDLE ftn,
                                CORINFO_ACCESS_FLAGS accessFlags, 
-                               BOOL fAllowThunk)
+                               BOOL fAllowThunk,
+                               CORINFO_CONST_LOOKUP * pResult    /* OUT */)
 {
     if (!m_pImage->m_pPreloader->CanEmbedFunctionEntryPoint(ftn, m_currentMethodHandle, accessFlags))
     {
-        return NULL;
+        return FALSE;
     }
 
     ZapNode * pEntryPointOrThunkToEmbed = NULL;
@@ -1859,17 +1858,32 @@ PVOID ZapInfo::embedDirectCall(CORINFO_METHOD_HANDLE ftn,
     {
         if (!fAllowThunk)
         {
-            return NULL;
+            return FALSE;
         }
 
-        pEntryPointOrThunkToEmbed = m_pImage->GetImportTable()->GetExternalMethodThunk(ftn);
+        pResult->accessType = IAT_PVALUE;
+        pResult->addr = m_pImage->GetImportTable()->GetExternalMethodCell(ftn);
+        return TRUE;
     }
 
 #ifdef _TARGET_ARM_
     pEntryPointOrThunkToEmbed = m_pImage->GetInnerPtr(pEntryPointOrThunkToEmbed, THUMB_CODE);
 #endif
 
-    return pEntryPointOrThunkToEmbed;
+    pResult->accessType = IAT_VALUE;
+    pResult->addr = pEntryPointOrThunkToEmbed;
+    return TRUE;
+}
+
+void ZapInfo::embedFunctionEntryImport(CORINFO_METHOD_HANDLE ftn,
+                                       CORINFO_CONST_LOOKUP * pResult    /* OUT */)
+{
+    ZapImport * pImport = m_pImage->GetImportTable()->GetFunctionEntryImport(ftn);
+    AppendConditionalImport(pImport);
+
+    // Tell the JIT to use an indirections
+    pResult->accessType = IAT_PVALUE;
+    pResult->addr = pImport;
 }
 
 void ZapInfo::getFunctionEntryPoint(
@@ -1889,20 +1903,9 @@ void ZapInfo::getFunctionEntryPoint(
 
     m_pImage->m_pPreloader->AddMethodToTransitiveClosureOfInstantiations(ftn);
 
-    void * entryPointOrThunkToEmbed = embedDirectCall(ftn, accessFlags, TRUE);
-    if (entryPointOrThunkToEmbed != NULL)
+    if (!embedDirectCall(ftn, accessFlags, TRUE, pResult))
     {
-        pResult->accessType = IAT_VALUE;
-        pResult->addr       = entryPointOrThunkToEmbed;
-    }
-    else
-    {
-        ZapImport * pImport = m_pImage->GetImportTable()->GetFunctionEntryImport(ftn);
-        AppendConditionalImport(pImport);
-
-        // Tell the JIT to use an indirections
-        pResult->accessType   = IAT_PVALUE;
-        pResult->addr         = pImport;
+        embedFunctionEntryImport(ftn, pResult);
     }
 }
 
@@ -1915,20 +1918,9 @@ void ZapInfo::getFunctionFixedEntryPoint(CORINFO_METHOD_HANDLE   ftn,
 
     // We can only embed entrypoints from the module being NGened since we do not support mapping of external 
     // import thunks to MethodDesc. It should be ok since the delegate targets are typically from the same module.
-    void * entryPointToEmbed = embedDirectCall(ftn, CORINFO_ACCESS_ANY, FALSE);
-
-    if (entryPointToEmbed != NULL)
+    if (!embedDirectCall(ftn, CORINFO_ACCESS_ANY, FALSE, pResult))
     {
-        pResult->accessType   = IAT_VALUE;
-        pResult->addr         = entryPointToEmbed;
-    }
-    else
-    {
-        ZapImport * pImport = m_pImage->GetImportTable()->GetFunctionEntryImport(ftn);
-        AppendConditionalImport(pImport);
-        
-        pResult->accessType   = IAT_PVALUE;
-        pResult->addr         = pImport;
+        embedFunctionEntryImport(ftn, pResult);
     }
 }
 

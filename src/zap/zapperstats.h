@@ -76,7 +76,6 @@ class ZapperStats
     unsigned m_relocSectionSize;
     unsigned m_ILMetadataSize;
     unsigned m_virtualImportThunkSize;
-    unsigned m_externalMethodThunkSize;
     unsigned m_externalMethodDataSize;
 
     unsigned m_prestubMethods;

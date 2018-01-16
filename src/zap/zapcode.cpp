@@ -261,11 +261,6 @@ void ZapImage::OutputCode(CodeType codeType)
                         m_pImportTable->PlaceImport((ZapImport *)pTarget);
                     break;
 
-                case ZapNodeType_ExternalMethodThunk:
-                    if (!pTarget->IsPlaced())
-                        m_pExternalMethodDataTable->PlaceExternalMethodThunk((ZapImport *)pTarget);
-                    break;
-
                 case ZapNodeType_ExternalMethodCell:
                     if (!pTarget->IsPlaced())
                         m_pExternalMethodDataTable->PlaceExternalMethodCell((ZapImport *)pTarget);

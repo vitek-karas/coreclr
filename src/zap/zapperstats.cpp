@@ -116,7 +116,6 @@ ZapperStats::ZapperStats()
     , m_readOnlyDataSectionSize( 0 )
     , m_relocSectionSize( 0 )
     , m_ILMetadataSize( 0 )
-    , m_externalMethodThunkSize( 0 )
     , m_externalMethodDataSize( 0 )
     , m_prestubMethods( 0 )
     , m_directMethods( 0 )
@@ -148,7 +147,6 @@ void ZapperStats::PrintStats()
         GetSvcLogger()->Printf( "Exception tables:           %8d\t%8.2f%%\n", m_exceptionSectionSize, (double)m_exceptionSectionSize/m_outputFileSize*100);
         GetSvcLogger()->Printf( "Relocs:                     %8d\t%8.2f%%\n", m_relocSectionSize, (double)m_relocSectionSize/m_outputFileSize*100);
         GetSvcLogger()->Printf( "IL metadata:                %8d\t%8.2f%%\n", m_ILMetadataSize, (double)m_ILMetadataSize/m_outputFileSize*100);
-        GetSvcLogger()->Printf( "External Method Thunks:     %8d\t%8.2f%%\n", m_externalMethodThunkSize, (double)m_externalMethodThunkSize/m_outputFileSize*100);
         GetSvcLogger()->Printf( "External Method Data:       %8d\t%8.2f%%\n", m_externalMethodDataSize, (double)m_externalMethodDataSize/m_outputFileSize*100);
         GetSvcLogger()->Printf( "Image of EE structures:     %8d\t%8.2f%%\n", m_preloadImageSize, (double)m_preloadImageSize/m_outputFileSize*100);
 

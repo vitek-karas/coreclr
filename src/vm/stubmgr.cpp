@@ -1489,7 +1489,6 @@ BOOL RangeSectionStubManager::CheckIsStub_Internal(PCODE stubStartAddress)
     case STUB_CODE_BLOCK_JUMPSTUB:
     case STUB_CODE_BLOCK_STUBLINK:
     case STUB_CODE_BLOCK_VIRTUAL_METHOD_THUNK:
-    case STUB_CODE_BLOCK_EXTERNAL_METHOD_THUNK:
     case STUB_CODE_BLOCK_METHOD_CALL_THUNK:
         return TRUE;
     default:
@@ -1540,19 +1539,6 @@ BOOL RangeSectionStubManager::DoTraceStub(PCODE stubStartAddress, TraceDestinati
             }
             return TRUE;
         }
-
-    case STUB_CODE_BLOCK_EXTERNAL_METHOD_THUNK:
-        {
-            PCODE pTarget = GetMethodThunkTarget(stubStartAddress);
-            if (pTarget != ExecutionManager::FindZapModule(stubStartAddress)->
-                                        GetNGenLayoutInfo()->m_pExternalMethodFixupJumpStub)
-            {
-                trace->InitForStub(pTarget);
-                return TRUE;
-            }
-        }
-
-        __fallthrough;
 
     case STUB_CODE_BLOCK_METHOD_CALL_THUNK:
 #ifdef DACCESS_COMPILE
@@ -1629,9 +1615,6 @@ LPCWSTR RangeSectionStubManager::GetStubManagerName(PCODE addr)
 
     case STUB_CODE_BLOCK_VIRTUAL_METHOD_THUNK:
         return W("VirtualMethodThunk");
-
-    case STUB_CODE_BLOCK_EXTERNAL_METHOD_THUNK:
-        return W("ExternalMethodThunk");
 
     case STUB_CODE_BLOCK_METHOD_CALL_THUNK:
         return W("MethodCallThunk");

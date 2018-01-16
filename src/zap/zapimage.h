@@ -203,7 +203,6 @@ public:
     ZapVirtualSection * m_pDynamicHelperCellSection;
     ZapVirtualSection * m_pDynamicHelperDataSection;
     ZapVirtualSection * m_pVirtualImportThunkSection;
-    ZapVirtualSection * m_pExternalMethodThunkSection;
     ZapVirtualSection * m_pExternalMethodCellSection;
     ZapVirtualSection * m_pExternalMethodDataSection;
     ZapVirtualSection * m_pHotRuntimeFunctionSection;

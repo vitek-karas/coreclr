@@ -76,7 +76,6 @@ enum ZapNodeType {
 
 // Imports
 
-    ZapNodeType_ExternalMethodThunk,
     ZapNodeType_VirtualMethodThunk,
 
     ZapNodeType_ExternalMethodCell,

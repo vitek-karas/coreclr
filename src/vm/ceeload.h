@@ -546,7 +546,6 @@ struct NGenLayoutInfo
     MemoryRange             m_JumpStubs;
     MemoryRange             m_StubLinkStubs;
     MemoryRange             m_VirtualMethodThunks;
-    MemoryRange             m_ExternalMethodThunks;
     MemoryRange             m_ExceptionInfoLookupTable;
 
     PCODE                   m_pPrestubJumpStub;

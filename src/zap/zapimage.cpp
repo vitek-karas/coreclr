@@ -142,7 +142,7 @@ void ZapImage::InitializeSections()
     m_pImportSectionsTable = new (GetHeap()) ZapImportSectionsTable(this);
     m_pImportTableSection->Place(m_pImportSectionsTable);
 
-    m_pExternalMethodDataTable = new (GetHeap()) ZapImportSectionSignatures(this, m_pExternalMethodThunkSection, m_pGCSection);
+    m_pExternalMethodDataTable = new (GetHeap()) ZapImportSectionSignatures(this, m_pExternalMethodCellSection, m_pGCSection);
     m_pExternalMethodDataSection->Place(m_pExternalMethodDataTable);
 
     m_pStubDispatchDataTable = new (GetHeap()) ZapImportSectionSignatures(this, m_pStubDispatchCellSection, m_pGCSection);
@@ -345,7 +345,7 @@ void ZapImage::AllocateVirtualSections()
 
         m_pDynamicHelperCellSection = NewVirtualSection(pDataSection, IBCProfiledSection | HotColdSortedRange | ExternalMethodDataSection, sizeof(TADDR));
 
-        m_pExternalMethodCellSection = NewVirtualSection(pDataSection, IBCProfiledSection | HotColdSortedRange | ExternalMethodThunkSection, sizeof(TADDR));
+        m_pExternalMethodCellSection = NewVirtualSection(pDataSection, IBCProfiledSection | HotColdSortedRange | ExternalMethodDataSection, sizeof(TADDR));
 
         // m_pStubDispatchCellSection is  deliberately placed  directly after
         // the last m_pDelayLoadInfoTableSection (all .data sections go together in the order indicated).
@@ -415,7 +415,6 @@ void ZapImage::AllocateVirtualSections()
         // then cold items. These sections are marked as HotColdSortedRange since
         // they are neither completely hot, nor completely cold. 
         m_pVirtualImportThunkSection        = NewVirtualSection(pXDataSection, IBCProfiledSection | HotColdSortedRange | VirtualImportThunkSection, HELPER_TABLE_ALIGN);
-        m_pExternalMethodThunkSection       = NewVirtualSection(pXDataSection, IBCProfiledSection | HotColdSortedRange | ExternalMethodThunkSection, HELPER_TABLE_ALIGN);
         m_pHelperTableSection               = NewVirtualSection(pXDataSection, IBCProfiledSection | HotColdSortedRange| HelperTableSection, HELPER_TABLE_ALIGN);
 
         // hot for writing, i.e. profiling has indicated a write to this item, so at least one write likely per item at some point
@@ -1176,7 +1175,6 @@ void ZapImage::PrintStats(LPCWSTR wszOutputFileName)
     ACCUM_SIZE(m_stats->m_relocSectionSize, m_pBaseRelocsSection);
     ACCUM_SIZE(m_stats->m_ILMetadataSize, m_pILMetaData);
     ACCUM_SIZE(m_stats->m_virtualImportThunkSize, m_pVirtualImportThunkSection);
-    ACCUM_SIZE(m_stats->m_externalMethodThunkSize, m_pExternalMethodThunkSection);
     ACCUM_SIZE(m_stats->m_externalMethodDataSize, m_pExternalMethodDataSection);
 #undef ACCUM_SIZE
 

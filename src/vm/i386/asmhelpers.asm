@@ -1556,15 +1556,18 @@ _StubDispatchFixupStub@0 endp
 ;==========================================================================
 _ExternalMethodFixupStub@0 proc public
 
-    pop     eax             ; pop off the return address to the stub
-                            ; leaving the actual caller's return address on top of the stack
+    mov         eax, [esp]  ; remeber the caller's return address
+                            ; used later to figure out the indirection cell address
+                            ; which was used to call this stub.
 
     STUB_PROLOG
 
     mov         esi, esp
 
-    ; EAX is return address into CORCOMPILE_EXTERNAL_METHOD_THUNK. Subtract 5 to get start address.
-    sub         eax, 5
+    ; EAX is return address into the callsite which has "call [cell]"
+    ; subtract 4 to get the address of the call target, which points to the indirection cell.
+    ; From there load the address of the indirection cell.
+    mov         eax, [eax - 4]
 
     push        0
     push        0

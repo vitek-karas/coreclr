@@ -5804,11 +5804,6 @@ StubCodeBlockKind NativeImageJitManager::GetStubCodeBlockKind(RangeSection * pRa
         return STUB_CODE_BLOCK_VIRTUAL_METHOD_THUNK;
     }
 
-    if (pLayoutInfo->m_ExternalMethodThunks.IsInRange(currentPC))
-    {
-        return STUB_CODE_BLOCK_EXTERNAL_METHOD_THUNK;
-    }
-
     return STUB_CODE_BLOCK_UNKNOWN;
 }
 

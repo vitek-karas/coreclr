@@ -247,9 +247,13 @@ class ZapInfo
 
     void embedGenericSignature(CORINFO_LOOKUP * pLookup);
 
-    PVOID embedDirectCall(CORINFO_METHOD_HANDLE ftn, 
-                          CORINFO_ACCESS_FLAGS accessFlags,
-                          BOOL fAllowThunk);
+    BOOL embedDirectCall(CORINFO_METHOD_HANDLE ftn, 
+                         CORINFO_ACCESS_FLAGS accessFlags,
+                         BOOL fAllowThunk,
+                         CORINFO_CONST_LOOKUP * pResult    /* OUT */);
+
+    void embedFunctionEntryImport(CORINFO_METHOD_HANDLE ftn,
+                                  CORINFO_CONST_LOOKUP * pResult    /* OUT */);
 
 public:
     ZapInfo(ZapImage * pImage, mdMethodDef md, CORINFO_METHOD_HANDLE handle, CORINFO_MODULE_HANDLE module, unsigned methodProfilingDataFlags);

@@ -1067,7 +1067,6 @@ void DataImage::FixupModuleRVAs()
     FixupSectionRange(offsetof(NGenLayoutInfo, m_JumpStubs), m_pZapImage->m_pHelperTableSection);
     FixupSectionRange(offsetof(NGenLayoutInfo, m_StubLinkStubs), m_pZapImage->m_pStubsSection);
     FixupSectionRange(offsetof(NGenLayoutInfo, m_VirtualMethodThunks), m_pZapImage->m_pVirtualImportThunkSection);
-    FixupSectionRange(offsetof(NGenLayoutInfo, m_ExternalMethodThunks), m_pZapImage->m_pExternalMethodThunkSection);
 
     if (m_pZapImage->m_pExceptionInfoLookupTable->GetSize() != 0)
         FixupSectionRange(offsetof(NGenLayoutInfo, m_ExceptionInfoLookupTable), m_pZapImage->m_pExceptionInfoLookupTable);
