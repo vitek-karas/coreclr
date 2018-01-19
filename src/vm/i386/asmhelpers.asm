@@ -1554,6 +1554,9 @@ public _StubDispatchFixupPatchLabel@0
 _StubDispatchFixupStub@0 endp
 
 ;==========================================================================
+; This is the sub called from the ZapExternalMethodThunk thunk in native images.
+; It sets up the parameters to the ExternalMethodFixupWorker such that pIndirection
+; points to the ExternalMethodThunk and thus the worker will patch the thunk.
 _ExternalMethodFixupStub@0 proc public
 
     pop     eax             ; pop off the return address to the stub
@@ -1594,6 +1597,51 @@ public _ExternalMethodFixupPatchLabel@0
     ret
 
 _ExternalMethodFixupStub@0 endp
+
+;==========================================================================
+; This is the stub called from ZapExternalMethodCell indirection cell in native images.
+; It sets up parameters to the ExternalMethodFixupWorker so that pIndirection
+; points to the indirection cell, and thus the worker will patch the indirection cell.
+_ExternalMethodCellFixupStub@0 proc public
+
+    mov         eax, [esp]  ; remeber the caller's return address
+                            ; used later to figure out the indirection cell address
+                            ; which was used to call this stub.
+
+    STUB_PROLOG
+
+    mov         esi, esp
+
+    ; EAX is return address into the callsite which has "call [cell]"
+    ; subtract 4 to get the address of the call target, which points to the indirection cell.
+    ; From there load the address of the indirection cell.
+    mov         eax, [eax - 4]
+
+    push        0
+    push        0
+
+    push        eax
+
+    ; pTransitionBlock
+    push        esi
+
+    call        _ExternalMethodFixupWorker@16
+
+    ; eax now contains replacement stub. PreStubWorker will never return
+    ; NULL (it throws an exception if stub creation fails.)
+
+    ; From here on, mustn't trash eax
+    
+    STUB_EPILOG
+
+    ; Tailcall target
+    jmp eax    
+
+    ; This will never be executed. It is just to help out stack-walking logic
+    ; which disassembles the epilog to unwind the stack.
+    ret
+
+_ExternalMethodCellFixupStub@0 endp
 
 ifdef FEATURE_READYTORUN
 ;==========================================================================
