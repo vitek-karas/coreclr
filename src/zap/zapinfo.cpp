@@ -1863,7 +1863,7 @@ BOOL ZapInfo::embedDirectCall(CORINFO_METHOD_HANDLE ftn,
             return FALSE;
         }
 
-        if (CLRConfig::GetConfigValue(CLRConfig::INTERNAL_ZapNoRWX))
+        if (m_pImage->m_pExternalMethodCellSection != NULL)
         {
             _ASSERTE(!IsReadyToRunCompilation());
             pResult->accessType = IAT_PVALUE;
