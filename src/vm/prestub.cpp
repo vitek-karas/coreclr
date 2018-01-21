@@ -2027,7 +2027,7 @@ static PCODE PatchNonVirtualExternalMethod(MethodDesc * pMD, PCODE pCode, PTR_CO
     }
     else
     {
-        *EnsureWritablePages((TADDR *)pIndirection) = pCode;
+        *EnsureWritableExecutablePages((TADDR *)pIndirection) = pCode;
     }
 
     return pCode;
@@ -2040,9 +2040,6 @@ static PCODE PatchNonVirtualExternalMethod(MethodDesc * pMD, PCODE pCode, PTR_CO
 // thunk to point to the actual cross module address for the method body
 // Some methods also have one-time prestubs we defer the patching until
 // we have the final stable method entry point.
-// With the NoRWX option turn on NGen images calls to external methods use indirection
-// cells which initially point to the assembly code _ExternalMethodCellFixupStub
-// That calls the ExternalMethodFixupWorker which will patch the indirection cell.
 //
 EXTERN_C PCODE STDCALL ExternalMethodFixupWorker(TransitionBlock * pTransitionBlock, TADDR pIndirection, DWORD sectionIndex, Module * pModule)
 {
