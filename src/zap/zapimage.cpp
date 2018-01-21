@@ -345,18 +345,7 @@ void ZapImage::AllocateVirtualSections()
 
         m_pDynamicHelperCellSection = NewVirtualSection(pDataSection, IBCProfiledSection | HotColdSortedRange | ExternalMethodDataSection, sizeof(TADDR));
 
-#ifdef FEATURE_READYTORUN_COMPILER
-        if (IsReadyToRunCompilation())
-        {
-            m_pExternalMethodCellSection = NewVirtualSection(pDataSection, IBCProfiledSection | HotColdSortedRange | ExternalMethodThunkSection, sizeof(TADDR));
-        }
-        else
-#endif
-        if (CLRConfig::GetConfigValue(CLRConfig::INTERNAL_ZapNoRWX))
-        {
-            // We also use the value of m_pExternalMethodCellSection as an indication of whether external method calls should use thunks or indirection cells.
-            m_pExternalMethodCellSection = NewVirtualSection(pDataSection, IBCProfiledSection | HotColdSortedRange | ExternalMethodThunkSection, sizeof(TADDR));
-        }
+        m_pExternalMethodCellSection = NewVirtualSection(pDataSection, IBCProfiledSection | HotColdSortedRange | ExternalMethodThunkSection, sizeof(TADDR));
 
         // m_pStubDispatchCellSection is  deliberately placed  directly after
         // the last m_pDelayLoadInfoTableSection (all .data sections go together in the order indicated).
