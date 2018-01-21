@@ -610,8 +610,7 @@ enum CorInfoHelpFunc
     CORINFO_HELP_EE_PRECODE_FIXUP,      // Not real JIT helper. Used for Precode fixup in native images.
     CORINFO_HELP_EE_PINVOKE_FIXUP,      // Not real JIT helper. Used for PInvoke target fixup in native images.
     CORINFO_HELP_EE_VSD_FIXUP,          // Not real JIT helper. Used for VSD cell fixup in native images.
-    CORINFO_HELP_EE_EXTERNAL_FIXUP,     // Not real JIT helper. Used for fixup external method thunks in native images.
-    CORINFO_HELP_EE_EXTERNAL_CELL_FIXUP,// Not real JIT helper. Used for fixup external method cells in native images.
+    CORINFO_HELP_EE_EXTERNAL_FIXUP,     // Not real JIT helper. Used for to fixup external method thunks in native images.
     CORINFO_HELP_EE_VTABLE_FIXUP,       // Not real JIT helper. Used for inherited vtable slot fixup in native images.
 
     CORINFO_HELP_EE_REMOTING_THUNK,     // Not real JIT helper. Used for remoting precode in native images.
