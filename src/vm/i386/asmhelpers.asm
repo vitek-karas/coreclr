@@ -1564,7 +1564,7 @@ _ExternalMethodFixupStub@0 proc public
     mov         esi, esp
 
     ; EAX is return address into CORCOMPILE_EXTERNAL_METHOD_THUNK. Subtract 5 to get start address.
-    sub         eax, 5
+    mov         eax, [eax + 3]
 
     push        0
     push        0
