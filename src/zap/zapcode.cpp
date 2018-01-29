@@ -262,8 +262,9 @@ void ZapImage::OutputCode(CodeType codeType)
                     break;
 
                 case ZapNodeType_ExternalMethodThunk:
-                    if (!pTarget->IsPlaced())
-                        m_pExternalMethodDataTable->PlaceExternalMethodThunk((ZapImport *)pTarget);
+                    // Should never get here, external method thunks are only used from external method indirection cells.
+                    // Never directly referenced from code.
+                    _ASSERTE(FALSE);
                     break;
 
                 case ZapNodeType_ExternalMethodCell:

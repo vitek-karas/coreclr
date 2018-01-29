@@ -343,6 +343,12 @@ ASMCONSTANTS_C_ASSERT(Thread__m_pDomain == offsetof(Thread, m_pDomain));
 
 #endif
 
+#define ExternalMethodThunk__ReturnAddressOffset 0x05
+ASMCONSTANTS_C_ASSERT(ExternalMethodThunk__ReturnAddressOffset == offsetof(CORCOMPILE_EXTERNAL_METHOD_THUNK, precodeType));
+
+#define ExternalMethodThunk__m_pIndirectionCell  0x08
+ASMCONSTANTS_C_ASSERT(ExternalMethodThunk__m_pIndirectionCell == offsetof(CORCOMPILE_EXTERNAL_METHOD_THUNK, m_pIndirectionCell));
+
 #ifdef FEATURE_STUBS_AS_IL
 // DelegateObject from src/vm/object.h
 #define DelegateObject___target             0x04    // offset 0 is m_pMethTab of base class Object

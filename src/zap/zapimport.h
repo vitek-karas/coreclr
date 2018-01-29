@@ -415,7 +415,6 @@ public:
     ZapImport * GetVirtualImportThunk(CORINFO_METHOD_HANDLE handle, int slot);
     void        PlaceVirtualImportThunk(ZapImport * pImportThunk);
 
-    ZapImport * GetExternalMethodThunk(CORINFO_METHOD_HANDLE handle, ZapNode * pIndirectionCell);
     ZapImport * GetExternalMethodCell(CORINFO_METHOD_HANDLE handle);
     ZapImport * GetStubDispatchCell(CORINFO_CLASS_HANDLE typeHnd, CORINFO_METHOD_HANDLE methHnd);
 
@@ -520,7 +519,6 @@ public:
     ZapImportSectionSignatures(ZapImage * pImage, ZapVirtualSection * pImportSection, ZapVirtualSection * pGCSection = NULL);
     ~ZapImportSectionSignatures();
 
-    void PlaceExternalMethodThunk(ZapImport * pImport);
     void PlaceExternalMethodCell(ZapImport * pImport);
     void PlaceStubDispatchCell(ZapImport * pImport);
     void PlaceDynamicHelperCell(ZapImport * pImport);

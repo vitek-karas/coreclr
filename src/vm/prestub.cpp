@@ -2027,7 +2027,7 @@ static PCODE PatchNonVirtualExternalMethod(MethodDesc * pMD, PCODE pCode, PTR_CO
     }
     else
     {
-        *EnsureWritableExecutablePages((TADDR *)pIndirection) = pCode;
+        *EnsureWritablePages((TADDR *)pIndirection) = pCode;
     }
 
     return pCode;

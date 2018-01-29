@@ -457,10 +457,14 @@ void ZapImportSectionSignatures::Save(ZapWriter * pZapWriter)
 //
 
 //
-// External method thunk is a patchable thunk used for cross-module direct calls
+// External method thunk is a thunk used for cross-module direct calls
+// It is called through External method indirection cell. Its only purpose is to identify the indirection cell used
+// and pass control to the ExternalMethodFixupWorker.
 //
 class ZapExternalMethodThunk : public ZapImport
 {
+    // The indirection cell which points to this thunk.
+    // The thunk contains a back pointer so that at runtime we can identify the indirection cell.
     ZapNode * m_pIndirectionCell;
 
 public:
@@ -492,24 +496,8 @@ public:
 
     virtual void EncodeSignature(ZapImportTable * pTable, SigBuilder * pSigBuilder)
     {
-        //CORINFO_METHOD_HANDLE handle = (CORINFO_METHOD_HANDLE)GetHandle();
-
-        //CORINFO_MODULE_HANDLE referencingModule;
-        //mdToken token = pTable->GetCompileInfo()->TryEncodeMethodAsToken(handle, NULL, &referencingModule);
-        //if (token != mdTokenNil)
-        //{
-        //    _ASSERTE(TypeFromToken(token) == mdtMethodDef || TypeFromToken(token) == mdtMemberRef);
-
-        //    pTable->EncodeModule(
-        //        (TypeFromToken(token) == mdtMethodDef) ? ENCODE_METHOD_ENTRY_DEF_TOKEN : ENCODE_METHOD_ENTRY_REF_TOKEN,
-        //        referencingModule, pSigBuilder);
-
-        //    pSigBuilder->AppendData(RidFromToken(token));
-        //}
-        //else
-        //{
-        //    pTable->EncodeMethod(ENCODE_METHOD_ENTRY, handle, pSigBuilder);
-        //}
+        // Should never get here as we don't register any blob for the thunk.
+        _ASSERTE(FALSE);
     }
 
     virtual void Save(ZapWriter * pZapWriter);
@@ -526,7 +514,7 @@ void ZapExternalMethodThunk::Save(ZapWriter * pZapWriter)
     thunk.callJmp[0]  = 0xE8;  // call rel32
     pImage->WriteReloc(&thunk, 1, helper, 0, IMAGE_REL_BASED_REL32);
     thunk.precodeType = _PRECODE_EXTERNAL_METHOD_THUNK;
-    pImage->WriteReloc(&thunk, offsetof(CORCOMPILE_EXTERNAL_METHOD_THUNK, pIndirectionCell), m_pIndirectionCell, 0, IMAGE_REL_BASED_PTR);
+    pImage->WriteReloc(&thunk, offsetof(CORCOMPILE_EXTERNAL_METHOD_THUNK, m_pIndirectionCell), m_pIndirectionCell, 0, IMAGE_REL_BASED_PTR);
 #elif defined(_TARGET_ARM_) 
     // Setup the call to ExternalMethodFixupStub
     //
@@ -563,34 +551,6 @@ void ZapExternalMethodThunk::Save(ZapWriter * pZapWriter)
 
     pZapWriter->Write(&thunk,  sizeof(thunk));
     _ASSERTE(sizeof(thunk) == GetSize());
-}
-
-void ZapImportSectionSignatures::PlaceExternalMethodThunk(ZapImport * pImport)
-{
-    ZapExternalMethodThunk * pThunk = (ZapExternalMethodThunk *)pImport;
-
-    if (m_pImportSection->GetNodeCount() == 0)
-    {
-        m_dwIndex = m_pImage->GetImportSectionsTable()->Append(CORCOMPILE_IMPORT_TYPE_EXTERNAL_METHOD, CORCOMPILE_IMPORT_FLAGS_CODE,
-            sizeof(CORCOMPILE_EXTERNAL_METHOD_THUNK), m_pImportSection, this, m_pGCRefMapTable);
-
-        // Make sure the helper created
-        m_pImage->GetHelperThunk(CORINFO_HELP_EE_EXTERNAL_FIXUP);
-    }
-
-    // Add entry to both the the cell and data sections
-    m_pImportSection->Place(pThunk);
-
-    m_pImage->GetImportTable()->PlaceImportBlob(pThunk);
-
-    m_pGCRefMapTable->Append(pThunk->GetMethod());
-}
-
-ZapImport * ZapImportTable::GetExternalMethodThunk(CORINFO_METHOD_HANDLE handle, ZapNode * pIndirectionCell)
-{
-    ZapExternalMethodThunk * pThunk = (ZapExternalMethodThunk *)GetImport<ZapExternalMethodThunk, ZapNodeType_ExternalMethodThunk>((PVOID)handle);
-    pThunk->SetIndirectionCell(pIndirectionCell);
-    return pThunk;
 }
 
 //
@@ -700,6 +660,16 @@ void ZapImportSectionSignatures::PlaceStubDispatchCell(ZapImport * pImport)
 
 //
 // External method cell is lazily initialized indirection used for method calls
+// For non-R2R cases:
+//   The callsite uses indirect call through this indirection cell
+//   at first that leads to the ExternalMethodThunk, which in turn calls the ExternalMethodFixupStub
+//   The stub uses the thunk to figure out which indirection cell was used
+//   and calls the ExternalMethodFixupWorker.
+//   The worker will patch the indirection cell once the resolution is complete.
+// For R2R cases:
+//   The callsite uses indirect call through this indirection cell
+//   at first it leads to the DelayLoad_MethodCall stub, which will end up calling the same
+//   ExternalMethodFixupWorker. Again the indirection cell is patched at the end.
 //
 class ZapExternalMethodCell : public ZapImport
 {
@@ -791,6 +761,7 @@ public:
     }
 };
 
+// Returns an indirection cell which can be called (indirectly) to reach the specified external method.
 ZapImport * ZapImportTable::GetExternalMethodCell(CORINFO_METHOD_HANDLE handle)
 {
     ZapExternalMethodCell * pCell = (ZapExternalMethodCell *)GetImport<ZapExternalMethodCell, ZapNodeType_ExternalMethodCell>((PVOID)handle);
@@ -800,7 +771,8 @@ ZapImport * ZapImportTable::GetExternalMethodCell(CORINFO_METHOD_HANDLE handle)
         // So if the cell was already created before we got here, it would already have been fully initialized as well.
         // So avoid creating a thunk again.
         // We can simply reuse the same cell for a different call site.
-        ZapImport * pThunk = GetExternalMethodThunk(handle, pCell);
+        ZapExternalMethodThunk * pThunk = (ZapExternalMethodThunk *)GetImport<ZapExternalMethodThunk, ZapNodeType_ExternalMethodThunk>((PVOID)handle);
+        pThunk->SetIndirectionCell(pCell);
         pCell->SetExternalMethodThunk(pThunk);
     }
 
@@ -839,7 +811,9 @@ void ZapImportSectionSignatures::PlaceExternalMethodCell(ZapImport * pImport)
 
     if (!IsReadyToRunCompilation())
     {
-        // Have to place the thunk as well, as there's no direct reference to it other than through the indirection cell.
+        // The Place* methods are called when we find a code which references this node.
+        // External method thunks are never referenced directly from code, they are only reached through the external method cells
+        // so their Place* method will never get called. So we have to call it here, when we're placing the indirection cell.
         m_pImage->m_pExternalMethodThunkSection->Place(pCell->GetExternalMethodThunk());
     }
 }
