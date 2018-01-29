@@ -521,6 +521,12 @@ ASMCONSTANTS_C_ASSERT(MethodDescClassification__mcInstantiated == mcInstantiated
 ASMCONSTANTS_C_ASSERT(OFFSET__TEB__ThreadLocalStoragePointer == offsetof(TEB, ThreadLocalStoragePointer));
 #endif
 
+#define ExternalMethodThunk__ReturnAddressOffset 0x05
+ASMCONSTANTS_C_ASSERT(ExternalMethodThunk__ReturnAddressOffset == offsetof(CORCOMPILE_EXTERNAL_METHOD_THUNK, precodeType));
+
+#define ExternalMethodThunk__m_pIndirectionCell  0x08
+ASMCONSTANTS_C_ASSERT(ExternalMethodThunk__m_pIndirectionCell == offsetof(CORCOMPILE_EXTERNAL_METHOD_THUNK, m_pIndirectionCell));
+
 // If you change these constants, you need to update code in
 // RedirectHandledJITCase.asm and ExcepAMD64.cpp.
 #define REDIRECTSTUB_ESTABLISHER_OFFSET_RBP 0

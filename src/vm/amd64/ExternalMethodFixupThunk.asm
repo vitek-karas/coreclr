@@ -21,7 +21,9 @@ NESTED_ENTRY ExternalMethodFixupStub, _TEXT, ProcessCLRException
         PROLOG_WITH_TRANSITION_BLOCK 0, 8, rdx
 
         lea             rcx, [rsp + __PWTB_TransitionBlock] ; pTransitionBlock
-        sub             rdx, 5                              ; pThunk
+
+        ; Load the address of the indirection cell from the thunk.
+        mov             rdx, [rdx + (ExternalMethodThunk__m_pIndirectionCell - ExternalMethodThunk__ReturnAddressOffset)] ; pThunk
         mov             r8, 0                               ; sectionIndex
         mov             r9, 0                               ; pModule
 
