@@ -461,9 +461,18 @@ void ZapImportSectionSignatures::Save(ZapWriter * pZapWriter)
 //
 class ZapExternalMethodThunk : public ZapImport
 {
+    ZapNode * m_pIndirectionCell;
+
 public:
     ZapExternalMethodThunk()
     {
+    }
+
+    void SetIndirectionCell(ZapNode * pIndirectionCell)
+    {
+        _ASSERTE(m_pIndirectionCell == NULL);
+        _ASSERTE(pIndirectionCell != NULL);
+        m_pIndirectionCell = pIndirectionCell;
     }
 
     CORINFO_METHOD_HANDLE GetMethod()
@@ -483,24 +492,24 @@ public:
 
     virtual void EncodeSignature(ZapImportTable * pTable, SigBuilder * pSigBuilder)
     {
-        CORINFO_METHOD_HANDLE handle = (CORINFO_METHOD_HANDLE)GetHandle();
+        //CORINFO_METHOD_HANDLE handle = (CORINFO_METHOD_HANDLE)GetHandle();
 
-        CORINFO_MODULE_HANDLE referencingModule;
-        mdToken token = pTable->GetCompileInfo()->TryEncodeMethodAsToken(handle, NULL, &referencingModule);
-        if (token != mdTokenNil)
-        {
-            _ASSERTE(TypeFromToken(token) == mdtMethodDef || TypeFromToken(token) == mdtMemberRef);
+        //CORINFO_MODULE_HANDLE referencingModule;
+        //mdToken token = pTable->GetCompileInfo()->TryEncodeMethodAsToken(handle, NULL, &referencingModule);
+        //if (token != mdTokenNil)
+        //{
+        //    _ASSERTE(TypeFromToken(token) == mdtMethodDef || TypeFromToken(token) == mdtMemberRef);
 
-            pTable->EncodeModule(
-                (TypeFromToken(token) == mdtMethodDef) ? ENCODE_METHOD_ENTRY_DEF_TOKEN : ENCODE_METHOD_ENTRY_REF_TOKEN,
-                referencingModule, pSigBuilder);
+        //    pTable->EncodeModule(
+        //        (TypeFromToken(token) == mdtMethodDef) ? ENCODE_METHOD_ENTRY_DEF_TOKEN : ENCODE_METHOD_ENTRY_REF_TOKEN,
+        //        referencingModule, pSigBuilder);
 
-            pSigBuilder->AppendData(RidFromToken(token));
-        }
-        else
-        {
-            pTable->EncodeMethod(ENCODE_METHOD_ENTRY, handle, pSigBuilder);
-        }
+        //    pSigBuilder->AppendData(RidFromToken(token));
+        //}
+        //else
+        //{
+        //    pTable->EncodeMethod(ENCODE_METHOD_ENTRY, handle, pSigBuilder);
+        //}
     }
 
     virtual void Save(ZapWriter * pZapWriter);
@@ -517,6 +526,7 @@ void ZapExternalMethodThunk::Save(ZapWriter * pZapWriter)
     thunk.callJmp[0]  = 0xE8;  // call rel32
     pImage->WriteReloc(&thunk, 1, helper, 0, IMAGE_REL_BASED_REL32);
     thunk.precodeType = _PRECODE_EXTERNAL_METHOD_THUNK;
+    pImage->WriteReloc(&thunk, offsetof(CORCOMPILE_EXTERNAL_METHOD_THUNK, pIndirectionCell), m_pIndirectionCell, 0, IMAGE_REL_BASED_PTR);
 #elif defined(_TARGET_ARM_) 
     // Setup the call to ExternalMethodFixupStub
     //
@@ -576,9 +586,11 @@ void ZapImportSectionSignatures::PlaceExternalMethodThunk(ZapImport * pImport)
     m_pGCRefMapTable->Append(pThunk->GetMethod());
 }
 
-ZapImport * ZapImportTable::GetExternalMethodThunk(CORINFO_METHOD_HANDLE handle)
+ZapImport * ZapImportTable::GetExternalMethodThunk(CORINFO_METHOD_HANDLE handle, ZapNode * pIndirectionCell)
 {
-    return GetImport<ZapExternalMethodThunk, ZapNodeType_ExternalMethodThunk>((PVOID)handle);
+    ZapExternalMethodThunk * pThunk = (ZapExternalMethodThunk *)GetImport<ZapExternalMethodThunk, ZapNodeType_ExternalMethodThunk>((PVOID)handle);
+    pThunk->SetIndirectionCell(pIndirectionCell);
+    return pThunk;
 }
 
 //
@@ -693,12 +705,28 @@ class ZapExternalMethodCell : public ZapImport
 {
     ZapNode * m_pDelayLoadHelper;
 
+    // Only used for non-R2R cases where we have the indirection cell pointing to the thunk
+    ZapImport * m_pExternalMethodThunk;
+
 public:
     void SetDelayLoadHelper(ZapNode * pDelayLoadHelper)
     {
         _ASSERTE(m_pDelayLoadHelper == NULL);
         m_pDelayLoadHelper = pDelayLoadHelper;
     }
+
+    void SetExternalMethodThunk(ZapImport * pExternalMethodThunk)
+    {
+        _ASSERTE(m_pExternalMethodThunk == NULL);
+        _ASSERTE(pExternalMethodThunk != NULL);
+        m_pExternalMethodThunk = pExternalMethodThunk;
+    }
+
+    ZapImport * GetExternalMethodThunk()
+    {
+        return m_pExternalMethodThunk;
+    }
+
     CORINFO_METHOD_HANDLE GetMethod()
     {
         return (CORINFO_METHOD_HANDLE)GetHandle();
@@ -745,15 +773,38 @@ public:
     {
         ZapImage * pImage = ZapImage::GetImage(pZapWriter);
 
+        ZapNode * pTarget;
+#ifdef FEATURE_READYTORUN_COMPILER
+        if (IsReadyToRunCompilation())
+        {
+            pTarget = m_pDelayLoadHelper;
+        }
+        else
+#endif
+        {
+            pTarget = m_pExternalMethodThunk;
+        }
+
         PVOID cell;
-        pImage->WriteReloc(&cell, 0, m_pDelayLoadHelper, 0, IMAGE_REL_BASED_PTR);
+        pImage->WriteReloc(&cell, 0, pTarget, 0, IMAGE_REL_BASED_PTR);
         pZapWriter->Write(&cell, sizeof(cell));
     }
 };
 
 ZapImport * ZapImportTable::GetExternalMethodCell(CORINFO_METHOD_HANDLE handle)
 {
-    return GetImport<ZapExternalMethodCell, ZapNodeType_ExternalMethodCell>((PVOID)handle);
+    ZapExternalMethodCell * pCell = (ZapExternalMethodCell *)GetImport<ZapExternalMethodCell, ZapNodeType_ExternalMethodCell>((PVOID)handle);
+    if (pCell->GetExternalMethodThunk() == NULL)
+    {
+        // We reuse imports based on the value of the handle.
+        // So if the cell was already created before we got here, it would already have been fully initialized as well.
+        // So avoid creating a thunk again.
+        // We can simply reuse the same cell for a different call site.
+        ZapImport * pThunk = GetExternalMethodThunk(handle, pCell);
+        pCell->SetExternalMethodThunk(pThunk);
+    }
+
+    return pCell;
 }
 
 void ZapImportSectionSignatures::PlaceExternalMethodCell(ZapImport * pImport)
@@ -785,6 +836,12 @@ void ZapImportSectionSignatures::PlaceExternalMethodCell(ZapImport * pImport)
     m_pImage->GetImportTable()->PlaceImportBlob(pCell);
 
     m_pGCRefMapTable->Append(pCell->GetMethod());
+
+    if (!IsReadyToRunCompilation())
+    {
+        // Have to place the thunk as well, as there's no direct reference to it other than through the indirection cell.
+        m_pImage->m_pExternalMethodThunkSection->Place(pCell->GetExternalMethodThunk());
+    }
 }
 
 //

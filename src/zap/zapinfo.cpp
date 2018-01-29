@@ -1863,7 +1863,9 @@ BOOL ZapInfo::embedDirectCall(CORINFO_METHOD_HANDLE ftn,
             return FALSE;
         }
 
-        pEntryPointOrThunkToEmbed = m_pImage->GetImportTable()->GetExternalMethodThunk(ftn);
+        pResult->accessType = IAT_PVALUE;
+        pResult->addr = m_pImage->GetImportTable()->GetExternalMethodCell(ftn);
+        return TRUE;
     }
 
 #ifdef _TARGET_ARM_
