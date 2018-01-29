@@ -1872,6 +1872,7 @@ BOOL ZapInfo::embedDirectCall(CORINFO_METHOD_HANDLE ftn,
 
     pResult->accessType = IAT_VALUE;
     pResult->addr = pEntryPointOrThunkToEmbed;
+    return TRUE;
 }
 
 void ZapInfo::embedFunctionEntryImport(CORINFO_METHOD_HANDLE ftn,
