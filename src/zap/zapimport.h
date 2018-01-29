@@ -415,7 +415,7 @@ public:
     ZapImport * GetVirtualImportThunk(CORINFO_METHOD_HANDLE handle, int slot);
     void        PlaceVirtualImportThunk(ZapImport * pImportThunk);
 
-    ZapImport * GetExternalMethodThunk(CORINFO_METHOD_HANDLE handle);
+    ZapImport * GetExternalMethodThunk(CORINFO_METHOD_HANDLE handle, ZapNode * pIndirectionCell);
     ZapImport * GetExternalMethodCell(CORINFO_METHOD_HANDLE handle);
     ZapImport * GetStubDispatchCell(CORINFO_CLASS_HANDLE typeHnd, CORINFO_METHOD_HANDLE methHnd);
 
