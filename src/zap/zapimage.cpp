@@ -88,7 +88,7 @@ ZapImage::~ZapImage()
 
     if (m_pExternalMethodDataTable != NULL)
         m_pExternalMethodDataTable->~ZapImportSectionSignatures();
-
+    
     if (m_pDynamicHelperDataTable != NULL)
         m_pDynamicHelperDataTable->~ZapImportSectionSignatures();
 
@@ -142,7 +142,7 @@ void ZapImage::InitializeSections()
     m_pImportSectionsTable = new (GetHeap()) ZapImportSectionsTable(this);
     m_pImportTableSection->Place(m_pImportSectionsTable);
 
-    m_pExternalMethodDataTable = new (GetHeap()) ZapImportSectionSignatures(this, m_pExternalMethodThunkSection, m_pGCSection);
+    m_pExternalMethodDataTable = new (GetHeap()) ZapImportSectionSignatures(this, m_pExternalMethodCellSection, m_pGCSection);
     m_pExternalMethodDataSection->Place(m_pExternalMethodDataTable);
 
     m_pStubDispatchDataTable = new (GetHeap()) ZapImportSectionSignatures(this, m_pStubDispatchCellSection, m_pGCSection);
@@ -415,7 +415,6 @@ void ZapImage::AllocateVirtualSections()
         // then cold items. These sections are marked as HotColdSortedRange since
         // they are neither completely hot, nor completely cold. 
         m_pVirtualImportThunkSection        = NewVirtualSection(pXDataSection, IBCProfiledSection | HotColdSortedRange | VirtualImportThunkSection, HELPER_TABLE_ALIGN);
-        m_pExternalMethodThunkSection       = NewVirtualSection(pXDataSection, IBCProfiledSection | HotColdSortedRange | ExternalMethodThunkSection, HELPER_TABLE_ALIGN);
         m_pHelperTableSection               = NewVirtualSection(pXDataSection, IBCProfiledSection | HotColdSortedRange| HelperTableSection, HELPER_TABLE_ALIGN);
 
         // hot for writing, i.e. profiling has indicated a write to this item, so at least one write likely per item at some point
@@ -528,6 +527,8 @@ void ZapImage::AllocateVirtualSections()
         // their GC Info touched during profiling
         //
         m_pHotGCSection = NewVirtualSection(pTextSection, IBCProfiledSection | WarmRange | GCInfoSection, sizeof(DWORD));
+
+        m_pExternalMethodThunkSection = NewVirtualSection(pTextSection, IBCProfiledSection | HotColdSortedRange | ExternalMethodThunkSection, HELPER_TABLE_ALIGN);
 
 #if !defined(_TARGET_ARM_)
         // For ARM, put these sections more towards the end because bl/b instructions have limited diplacement

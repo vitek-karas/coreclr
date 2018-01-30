@@ -1563,8 +1563,9 @@ _ExternalMethodFixupStub@0 proc public
 
     mov         esi, esp
 
-    ; EAX is return address into CORCOMPILE_EXTERNAL_METHOD_THUNK. Subtract 5 to get start address.
-    sub         eax, 5
+    ; EAX is return address into CORCOMPILE_EXTERNAL_METHOD_THUNK. Compute the address of the m_pIndirectionCell
+    ; and load its value into EAX.
+    mov         eax, [eax + (ExternalMethodThunk__m_pIndirectionCell - ExternalMethodThunk__ReturnAddressOffset)]
 
     push        0
     push        0
