@@ -99,6 +99,21 @@ private:
         return dac_cast<TADDR>(this);
     }
 
+    BOOL IsZapped()
+    {
+        return IsZapped((PTR_MethodDesc)GetMethodDesc());
+    }
+
+    BOOL IsZapped(PTR_MethodDesc pMD)
+    {
+        Module * pZapModule = pMD->GetZapModule();
+        return (pZapModule != NULL) && pZapModule->IsZappedPrecode((PCODE)this);
+    }
+
+#ifdef FEATURE_PREJIT
+    BOOL SetZappedTargetInterlocked(PTR_MethodDesc pMD, PCODE pTarget, PCODE pExpected);
+#endif
+
     static void UnexpectedPrecodeType(const char * originator, PrecodeType precodeType)
 
     {
