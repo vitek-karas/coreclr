@@ -227,10 +227,17 @@ void ZapImage::OutputCode(CodeType codeType)
                     }
                     break;
                 case ZapNodeType_MethodEntryPoint:
-                    pTarget = m_pMethodEntryPoints->CanDirectCall((ZapMethodEntryPoint *)pTarget, pMethod);
-                    if (pTarget != NULL)
                     {
-                        pReloc->m_pTargetNode = pTarget;
+                        ZapNode * pDirectCallTarget = m_pMethodEntryPoints->CanDirectCall((ZapMethodEntryPoint *)pTarget, pMethod);
+                        if (pDirectCallTarget != NULL)
+                        {
+                            ((ZapMethodEntryPoint *)pTarget)->SetDirectCallTarget(pDirectCallTarget);
+                        }
+
+                        if (!pTarget->IsPlaced())
+                        {
+                            m_pPrecodeIndirectionCellSection->Place(pTarget);
+                        }
                     }
                     break;
                 case ZapNodeType_Stub:
@@ -993,6 +1000,28 @@ void ZapMethodEntryPoint::Resolve(ZapImage * pImage)
     }
 }
 
+void ZapMethodEntryPoint::Save(ZapWriter *pZapWriter)
+{
+    ZapImage * pImage = ZapImage::GetImage(pZapWriter);
+    ZapNode * pPrecodeNode = new (pImage->GetHeap()) ZapNode();
+    ZapNode * pTarget;
+    if (m_pDirectCallTarget != NULL)
+    {
+        pTarget = m_pDirectCallTarget;
+    }
+    else
+    {
+        DWORD rvaValue = pImage->m_pPreloader->MapMethodEntryPoint(GetHandle());
+        pPrecodeNode->SetRVA(rvaValue);
+        pTarget = pPrecodeNode;
+    }
+
+    PVOID cell;
+    pImage->WriteReloc(&cell, 0, pTarget, 0, IMAGE_REL_BASED_PTR);
+    pZapWriter->Write(&cell, sizeof(cell));
+}
+
+
 ZapMethodEntryPoint * ZapMethodEntryPointTable::GetMethodEntryPoint(CORINFO_METHOD_HANDLE handle, CORINFO_ACCESS_FLAGS accessFlags)
 {
     ZapMethodEntryPoint * pMethodEntryPoint = m_entries.Lookup(MethodEntryPointKey(handle, accessFlags));
@@ -1020,7 +1049,7 @@ void ZapMethodEntryPointTable::Resolve()
         if (!pMethodEntryPoint->IsUsed())
             continue;
 
-        pMethodEntryPoint->Resolve(m_pImage);
+        // pMethodEntryPoint->Resolve(m_pImage);
     }
 }
 

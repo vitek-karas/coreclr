@@ -1197,6 +1197,19 @@ ZapNode * DataImage::GetGenericSignature(PVOID signature, BOOL fMethod)
     return pGenericSignature;
 }
 
+ZapNode * DataImage::GetPlacedMethodEntryPointNode(MethodDesc * pMD)
+{
+     ZapNode *pNode = m_pZapImage->GetMethodEntryPointNode(CORINFO_METHOD_HANDLE(pMD));
+     if (pNode->IsPlaced())
+     {
+         return pNode;
+     }
+     else
+     {
+         return NULL;
+     }
+}
+
 #if defined(_TARGET_X86_) || defined(_TARGET_AMD64_)
 
 class ZapStubPrecode : public ZapNode

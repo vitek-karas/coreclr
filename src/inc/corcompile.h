@@ -332,6 +332,7 @@ struct CORCOMPILE_VIRTUAL_SECTION_INFO
     CORCOMPILE_SECTION_TYPE(CompressedMaps)                   \
     CORCOMPILE_SECTION_TYPE(Debug)                            \
     CORCOMPILE_SECTION_TYPE(BaseRelocs)                       \
+    CORCOMPILE_SECTION_TYPE(PrecodeIndirectionCell)           \
 
 // Hot: Items are frequently accessed ( Indicated by either IBC data, or
 //      statically known )

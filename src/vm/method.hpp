@@ -1337,6 +1337,8 @@ public:
 
     BOOL IsClassConstructorTriggeredViaPrestub();
 
+    TADDR GetAddrOfZapPrecodeIndirectionCell();
+
 public:
 
     // Returns preimplemented code of the method if method has one.
@@ -1832,15 +1834,20 @@ public:
     // Optional MethodDesc slots appear after the end of base MethodDesc in this order:
     //
 
-    // class MethodImpl;                            // Present if HasMethodImplSlot() is true
-
     typedef RelativePointer<PCODE> NonVtableSlot;   // Present if HasNonVtableSlot() is true 
                                                     // RelativePointer for NGen, PCODE for JIT
+
+    // class MethodImpl;                            // Present if HasMethodImplSlot() is true
 
 #define FIXUP_LIST_MASK 1
     typedef RelativePointer<TADDR> NativeCodeSlot;  // Present if HasNativeCodeSlot() is true
                                                     // lower order bit (FIXUP_LIST_MASK) used to determine if FixupListSlot is present
     typedef RelativePointer<TADDR> FixupListSlot;
+
+    // struct ComPlusCallInfo;                      // Present if IsGenericComPlusCall() is true
+
+    typedef RelativePointer<TADDR> ZapPrecodeIndirectionSlot;  // Present if IsZapped() is true
+                                                               // Points to an indirection cell which is used to patch precode to stable code
 
 // Stub Dispatch code
 public:
@@ -3272,6 +3279,11 @@ public:
 
         _ASSERTE(IMD_HasComPlusCallInfo());
         SIZE_T size = s_ClassificationSizeTable[m_wFlags & (mdcClassification | mdcHasNonVtableSlot | mdcMethodImpl)];
+
+        if (IsZapped())
+        {
+            size += sizeof(ZapPrecodeIndirectionSlot);
+        }
 
         if (HasNativeCodeSlot())
         {

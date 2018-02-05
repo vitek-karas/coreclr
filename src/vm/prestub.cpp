@@ -1863,10 +1863,14 @@ PCODE MethodDesc::DoPrestub(MethodTable *pDispatchingMT)
         }
     }
 
-    _ASSERTE(!IsPointingToPrestub());
+    //_ASSERTE(!IsPointingToPrestub());
     _ASSERTE(HasStableEntryPoint());
 
-    RETURN DoBackpatch(pMT, pDispatchingMT, FALSE);
+    PCODE pPatched = DoBackpatch(pMT, pDispatchingMT, FALSE);
+    if (pCode == NULL)
+        pCode = pPatched;
+
+    RETURN pCode;
 }
 
 #endif // !DACCESS_COMPILE

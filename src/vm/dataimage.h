@@ -463,6 +463,8 @@ public:
 
     ZapNode * GetGenericSignature(PVOID signature, BOOL fMethod);
 
+    ZapNode * GetPlacedMethodEntryPointNode(MethodDesc * pMD);
+
     void SavePrecode(PVOID ptr, MethodDesc * pMD, PrecodeType t, ItemKind kind, BOOL fIsPrebound = FALSE);
 
     void StoreCompressedLayoutMap(LookupMapBase *pMap, ItemKind kind);

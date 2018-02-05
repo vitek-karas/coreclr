@@ -246,8 +246,7 @@ class ZapMethodEntryPoint : public ZapNode
     CORINFO_METHOD_HANDLE   m_handle;       // Target method being called
     BYTE                    m_accessFlags;  // CORINFO_ACCESS_FLAGS
     BYTE                    m_fUsed;        // Entrypoint is used - needs to be resolved
-
-    ZapNode                *m_pEntryPoint;  // only used for abstract methods to remember the precode
+    ZapNode *               m_pDirectCallTarget;
 
 public:
     ZapMethodEntryPoint(CORINFO_METHOD_HANDLE handle, CORINFO_ACCESS_FLAGS accessFlags)
@@ -270,6 +269,16 @@ public:
         return (CORINFO_ACCESS_FLAGS)m_accessFlags;
     }
 
+    virtual DWORD GetSize()
+    {
+        return sizeof(TADDR);
+    }
+
+    virtual UINT GetAlignment()
+    {
+        return sizeof(TADDR);
+    }
+
     void SetIsUsed()
     {
         m_fUsed = true;
@@ -280,7 +289,14 @@ public:
         return m_fUsed;
     }
 
+    void SetDirectCallTarget(ZapNode * pCode)
+    {
+        m_pDirectCallTarget = pCode;
+    }
+
     void Resolve(ZapImage * pImage);
+
+    virtual void Save(ZapWriter *pZapWriter);
 };
 
 class ZapMethodEntryPointTable

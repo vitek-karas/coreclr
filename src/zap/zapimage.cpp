@@ -343,6 +343,8 @@ void ZapImage::AllocateVirtualSections()
             m_pDelayLoadInfoTableSection[i] = NewVirtualSection(pDataSection, IBCProfiledSection | HotRange | DelayLoadInfoTableSection, sizeof(TADDR));
         }
 
+        m_pPrecodeIndirectionCellSection = NewVirtualSection(pDataSection, IBCUnProfiledSection | HotRange | PrecodeIndirectionCellSection, sizeof(TADDR));
+
         m_pDynamicHelperCellSection = NewVirtualSection(pDataSection, IBCProfiledSection | HotColdSortedRange | ExternalMethodDataSection, sizeof(TADDR));
 
         m_pExternalMethodCellSection = NewVirtualSection(pDataSection, IBCProfiledSection | HotColdSortedRange | ExternalMethodThunkSection, sizeof(TADDR));

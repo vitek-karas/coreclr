@@ -214,6 +214,7 @@ public:
     ZapVirtualSection * m_pHotRuntimeFunctionLookupSection;
     ZapVirtualSection * m_pRuntimeFunctionLookupSection;
     ZapVirtualSection * m_pColdCodeMapSection;
+    ZapVirtualSection * m_pPrecodeIndirectionCellSection;
 #if defined(WIN64EXCEPTIONS)
     ZapVirtualSection * m_pHotUnwindDataSection;
     ZapVirtualSection * m_pUnwindDataSection;
@@ -821,6 +822,11 @@ public:
     BOOL HasClassLayoutOrder()
     {
         return m_fHasClassLayoutOrder;
+    }
+
+    ZapMethodEntryPoint * GetMethodEntryPointNode(CORINFO_METHOD_HANDLE method)
+    {
+        return m_pMethodEntryPoints->GetMethodEntryPoint(method, CORINFO_ACCESS_ANY);
     }
 
     HRESULT PrintTokenDescription(CorZapLogLevel level, mdToken token);

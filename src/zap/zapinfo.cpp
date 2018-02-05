@@ -1872,7 +1872,7 @@ BOOL ZapInfo::embedDirectCall(CORINFO_METHOD_HANDLE ftn,
     pEntryPointOrThunkToEmbed = m_pImage->GetInnerPtr(pEntryPointOrThunkToEmbed, THUMB_CODE);
 #endif
 
-    pResult->accessType = IAT_VALUE;
+    pResult->accessType = IAT_PVALUE;
     pResult->addr = pEntryPointOrThunkToEmbed;
     return TRUE;
 }

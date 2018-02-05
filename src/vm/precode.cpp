@@ -475,7 +475,19 @@ BOOL Precode::SetTargetInterlocked(PCODE target, BOOL fOnlyRedirectFromPrestub)
 
 #ifdef HAS_FIXUP_PRECODE
     case PRECODE_FIXUP:
+    {
+        PTR_MethodDesc pMD = (PTR_MethodDesc)AsFixupPrecode()->GetMethodDesc();
+        if (pMD->IsZapped() && !pMD->GetModule_NoLogging()->IsReadyToRun())
+        {
+            PTR_PCODE pIndirectionCell = (PTR_PCODE)pMD->GetAddrOfZapPrecodeIndirectionCell();
+            if (pIndirectionCell != NULL)
+            {
+                PCODE expected = GetEntryPoint();
+                return FastInterlockCompareExchangePointer(EnsureWritablePages(pIndirectionCell), target, expected) == expected;
+            }
+        }
         ret = AsFixupPrecode()->SetTargetInterlocked(target, expected);
+    }
         break;
 #endif // HAS_FIXUP_PRECODE
 

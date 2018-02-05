@@ -106,6 +106,11 @@ SIZE_T MethodDesc::SizeOf()
 
     SIZE_T size = s_ClassificationSizeTable[m_wFlags & (mdcClassification | mdcHasNonVtableSlot | mdcMethodImpl)];
 
+    if (IsZapped())
+    {
+        size += sizeof(ZapPrecodeIndirectionSlot);
+    }
+
     if (HasNativeCodeSlot())
     {
         size += (*dac_cast<PTR_TADDR>(dac_cast<TADDR>(this) + size) & FIXUP_LIST_MASK) ?
@@ -1075,8 +1080,26 @@ TADDR MethodDesc::GetAddrOfNativeCodeSlot()
 
     SIZE_T size = s_ClassificationSizeTable[m_wFlags & (mdcClassification | mdcHasNonVtableSlot |  mdcMethodImpl)];
 
+    if (IsZapped())
+    {
+        size += sizeof(ZapPrecodeIndirectionSlot);
+    }
+
     return dac_cast<TADDR>(this) + size;
 }
+
+//*******************************************************************************
+TADDR MethodDesc::GetAddrOfZapPrecodeIndirectionCell()
+{
+    WRAPPER_NO_CONTRACT;
+
+    _ASSERTE(IsZapped());
+
+    SIZE_T size = s_ClassificationSizeTable[m_wFlags & (mdcClassification | mdcHasNonVtableSlot | mdcMethodImpl)];
+
+    return (TADDR)ZapPrecodeIndirectionSlot::GetValueMaybeNullAtPtr(dac_cast<TADDR>(this) + size);
+}
+
 
 //*******************************************************************************
 PCODE MethodDesc::GetPreImplementedCode()
@@ -3531,6 +3554,19 @@ MethodDesc::Fixup(
         currentSize += sizeof(MethodImpl);
     }
 
+    
+    ZapNode * pMethodEntryPointNode = image->GetPlacedMethodEntryPointNode(this);
+    if (pMethodEntryPointNode != NULL)
+    {
+        image->FixupFieldToNode(this, currentSize, pMethodEntryPointNode, 0, IMAGE_REL_BASED_RelativePointer);
+    }
+    else
+    {
+        image->ZeroPointerField(this, currentSize);
+    }
+
+    currentSize += sizeof(ZapPrecodeIndirectionSlot);
+
     if (pNewMD->HasNativeCodeSlot())
     {
         ZapNode * pCodeNode = image->GetCodeAddress(this);
@@ -3609,6 +3645,8 @@ SIZE_T MethodDesc::SaveChunk::GetSavedMethodDescSize(MethodInfo * pMethodInfo)
 
     if (pMD->IsMethodImpl())
         size += sizeof(MethodImpl);
+
+    size += sizeof(ZapPrecodeIndirectionSlot);
 
     if (pMethodInfo->m_fHasNativeCodeSlot)
     {
