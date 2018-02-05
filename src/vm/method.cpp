@@ -556,7 +556,7 @@ PCODE MethodDesc::GetMethodEntryPoint()
 
         TADDR pSlot = dac_cast<TADDR>(this) + size;
 
-        return IsZapped() ? NonVtableSlot::GetValueAtPtr(pSlot) : *PTR_PCODE(pSlot);
+        return *PTR_PCODE(pSlot);
     }
 
     _ASSERTE(GetMethodTable()->IsCanonicalMethodTable());
@@ -3517,7 +3517,7 @@ MethodDesc::Fixup(
 
     if (HasNonVtableSlot())
     {
-        FixupSlot(image, this, currentSize, IMAGE_REL_BASED_RelativePointer);
+        FixupSlot(image, this, currentSize, IMAGE_REL_BASED_PTR);
 
         currentSize += sizeof(NonVtableSlot);
     }

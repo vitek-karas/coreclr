@@ -1547,11 +1547,6 @@ public:
         STATIC_CONTRACT_SO_TOLERANT;
         CONSISTENCY_CHECK(slotNumber < GetNumVtableSlots());
         PTR_PCODE pSlot = GetSlotPtrRaw(slotNumber);
-        if (IsZapped() && slotNumber >= GetNumVirtuals())
-        {
-            // Non-virtual slots in NGened images are relative pointers
-            return RelativePointer<PCODE>::GetValueAtPtr(dac_cast<TADDR>(pSlot));
-        }
         return *pSlot;
     }
 
@@ -1602,9 +1597,6 @@ public:
     {
         WRAPPER_NO_CONTRACT;
         STATIC_CONTRACT_SO_TOLERANT;
-
-        // Slots in NGened images are relative pointers
-        CONSISTENCY_CHECK(!IsZapped());
 
         return GetSlotPtrRaw(slotNum);
     }

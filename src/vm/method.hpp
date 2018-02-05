@@ -1835,8 +1835,7 @@ public:
 
     // class MethodImpl;                            // Present if HasMethodImplSlot() is true
 
-    typedef RelativePointer<PCODE> NonVtableSlot;   // Present if HasNonVtableSlot() is true 
-                                                    // RelativePointer for NGen, PCODE for JIT
+    typedef PTR_PCODE NonVtableSlot;                // Present if HasNonVtableSlot() is true 
 
 #define FIXUP_LIST_MASK 1
     typedef RelativePointer<TADDR> NativeCodeSlot;  // Present if HasNativeCodeSlot() is true
