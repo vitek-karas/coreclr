@@ -5008,13 +5008,7 @@ void MethodTable::Fixup(DataImage *image)
 
         if (pMD->GetMethodTable() == this)
         {
-            ZapRelocationType relocType;
-            if (slotNumber >= GetNumVirtuals())
-                relocType = IMAGE_REL_BASED_RelativePointer;
-            else
-                relocType = IMAGE_REL_BASED_PTR;
-
-            pMD->FixupSlot(image, slotBase, slotOffset, relocType);
+            pMD->FixupSlot(image, slotBase, slotOffset);
         }
         else
         {
@@ -9774,13 +9768,14 @@ void MethodTable::SetSlot(UINT32 slotNumber, PCODE slotCode)
     }
 #endif
 
-    // IBC logging is not needed here - slots in ngen images are immutable.
+    // MAYBE?: Add IBC logging - but we would need new type since we don't track vtable write access today
+    //         and the save loggic doesn't partition the vtable chunks for read/write either.
 
 #ifdef _TARGET_ARM_
     // Ensure on ARM that all target addresses are marked as thumb code.
     _ASSERTE(IsThumbCode(slotCode));
 #endif
-
+    
     *GetSlotPtrRaw(slotNumber) = slotCode;
 }
 
