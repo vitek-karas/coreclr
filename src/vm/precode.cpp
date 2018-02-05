@@ -89,18 +89,54 @@ PCODE Precode::GetTarget()
     PCODE target = NULL;
 
     PrecodeType precodeType = GetType();
+#ifdef FEATURE_PREJIT
+    PTR_MethodDesc pMD;
+#endif
     switch (precodeType)
     {
     case PRECODE_STUB:
+#ifdef FEATURE_PREJIT
+        pMD = (PTR_MethodDesc)AsStubPrecode()->GetMethodDesc();
+        if (IsZapped(pMD))
+        {
+            target = pMD->GetMethodEntryPoint();
+            if (target != this->GetEntryPoint())
+            {
+                break;
+            }
+        }
+#endif
         target = AsStubPrecode()->GetTarget();
         break;
 #ifdef HAS_REMOTING_PRECODE
     case PRECODE_REMOTING:
+#ifdef FEATURE_PREJIT
+        pMD = (PTR_MethodDesc)AsRemotingPrecode()->GetMethodDesc();
+        if (IsZapped(pMD))
+        {
+            target = pMD->GetMethodEntryPoint();
+            if (target != this->GetEntryPoint())
+            {
+                break;
+            }
+        }
+#endif
         target = AsRemotingPrecode()->GetTarget();
         break;
 #endif // HAS_REMOTING_PRECODE
 #ifdef HAS_FIXUP_PRECODE
     case PRECODE_FIXUP:
+#ifdef FEATURE_PREJIT
+        pMD = (PTR_MethodDesc)AsFixupPrecode()->GetMethodDesc();
+        if (IsZapped(pMD))
+        {
+            target = pMD->GetMethodEntryPoint();
+            if (target != this->GetEntryPoint())
+            {
+                break;
+            }
+        }
+#endif
         target = AsFixupPrecode()->GetTarget();
         break;
 #endif // HAS_FIXUP_PRECODE
@@ -429,6 +465,8 @@ void Precode::ResetTargetInterlocked()
 {
     WRAPPER_NO_CONTRACT;
 
+    _ASSERTE(!IsZapped());
+
     PrecodeType precodeType = GetType();
     switch (precodeType)
     {
@@ -448,6 +486,27 @@ void Precode::ResetTargetInterlocked()
     }
 }
 
+#ifdef FEATURE_PREJIT
+BOOL Precode::SetZappedTargetInterlocked(PTR_MethodDesc pMD, PCODE pTarget, PCODE pExpected)
+{
+    PTR_PCODE pSlot = pMD->GetAddrOfSlot();
+    if (TADDR(*pSlot) == TADDR(GetEntryPoint()))
+    {
+        // The target of the precode is reported as either some method entry point (if the precode has been patched)
+        // or as one of the stubs it calls initially.
+        // In the native image case, we're not patching the precode itself, but the method slot
+        // which points to it. So the slot never points to the stub, instead it points to the precode.
+        // So if the slot currently points to this precode, then it is the expected content.
+        // It's here just to make sure that we won the race for the compare exchange below.
+        // So if the slot points to the precode, it is safe to do so always.
+        pExpected = *pSlot;
+    }
+    EnsureWritablePages(pSlot);
+
+    return FastInterlockCompareExchangePointer(pSlot, pTarget, pExpected) == pExpected;
+}
+#endif
+
 BOOL Precode::SetTargetInterlocked(PCODE target, BOOL fOnlyRedirectFromPrestub)
 {
     WRAPPER_NO_CONTRACT;
@@ -461,26 +520,60 @@ BOOL Precode::SetTargetInterlocked(PCODE target, BOOL fOnlyRedirectFromPrestub)
     g_IBCLogger.LogMethodPrecodeWriteAccess(GetMethodDesc());
 
     PrecodeType precodeType = GetType();
+#ifdef FEATURE_PREJIT
+    PTR_MethodDesc pMD;
+#endif
     switch (precodeType)
     {
     case PRECODE_STUB:
-        ret = AsStubPrecode()->SetTargetInterlocked(target, expected);
+#ifdef FEATURE_PREJIT
+        pMD = (PTR_MethodDesc)AsStubPrecode()->GetMethodDesc();
+        if (IsZapped(pMD))
+        {
+            SetZappedTargetInterlocked(pMD, target, expected);
+        }
+        else
+#endif
+        {
+            ret = AsStubPrecode()->SetTargetInterlocked(target, expected);
+        }
         break;
 
 #ifdef HAS_REMOTING_PRECODE
     case PRECODE_REMOTING:
-        ret = AsRemotingPrecode()->SetTargetInterlocked(target, expected);
+#ifdef FEATURE_PREJIT
+        pMD = (PTR_MethodDesc)AsRemotingPrecode()->GetMethodDesc();
+        if (IsZapped(pMD))
+        {
+            SetZappedTargetInterlocked(pMD, target, expected);
+        }
+        else
+#endif
+        {
+            ret = AsRemotingPrecode()->SetTargetInterlocked(target, expected);
+        }
         break;
 #endif // HAS_REMOTING_PRECODE
 
 #ifdef HAS_FIXUP_PRECODE
     case PRECODE_FIXUP:
-        ret = AsFixupPrecode()->SetTargetInterlocked(target, expected);
+#ifdef FEATURE_PREJIT
+        pMD = (PTR_MethodDesc)AsFixupPrecode()->GetMethodDesc();
+        if (IsZapped(pMD))
+        {
+            SetZappedTargetInterlocked(pMD, target, expected);
+        }
+        else
+#endif
+        {
+            ret = AsFixupPrecode()->SetTargetInterlocked(target, expected);
+        }
         break;
 #endif // HAS_FIXUP_PRECODE
 
 #ifdef HAS_THISPTR_RETBUF_PRECODE
     case PRECODE_THISPTR_RETBUF:
+        _ASSERTE(!IsZapped());
         ret = AsThisPtrRetBufPrecode()->SetTargetInterlocked(target, expected);
         break;
 #endif // HAS_THISPTR_RETBUF_PRECODE
@@ -507,6 +600,8 @@ BOOL Precode::SetTargetInterlocked(PCODE target, BOOL fOnlyRedirectFromPrestub)
 void Precode::Reset()
 {
     WRAPPER_NO_CONTRACT;
+
+    _ASSERTE(!IsZapped());
 
     MethodDesc* pMD = GetMethodDesc();
     Init(GetType(), pMD, pMD->GetLoaderAllocatorForCode());
