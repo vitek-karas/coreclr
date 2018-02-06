@@ -99,16 +99,11 @@ private:
         return dac_cast<TADDR>(this);
     }
 
-    BOOL IsZapped()
-    {
-        return IsZapped((PTR_MethodDesc)GetMethodDesc());
-    }
-
-    BOOL IsZapped(PTR_MethodDesc pMD)
-    {
-        Module * pZapModule = pMD->GetZapModule();
-        return (pZapModule != NULL) && pZapModule->IsZappedPrecode((PCODE)this);
-    }
+    // Determines if the precode is part of a native image
+    BOOL IsZapped();
+    // Determines if the precode is part of a native image
+    // Optimization if the caller already has the precode's MethodDesc available.
+    BOOL IsZapped(PTR_MethodDesc pMD);
 
 #ifdef FEATURE_PREJIT
     BOOL SetZappedTargetInterlocked(PTR_MethodDesc pMD, PCODE pTarget, PCODE pExpected);

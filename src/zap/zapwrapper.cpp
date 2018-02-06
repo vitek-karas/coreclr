@@ -199,3 +199,23 @@ ZapNode * ZapWrapperTable::GetStub(void * pStub)
     _ASSERTE(pZapStub->GetType() == ZapNodeType_Stub);
     return m_pImage->GetInnerPtr(pZapStub, (PBYTE)pStub - (PBYTE)pStubData);
 }
+
+// Node which points to a method slot
+class ZapMethodSlot : public ZapWrapper
+{
+public:
+    virtual void Resolve(ZapImage * pImage)
+    {
+        SetRVA(pImage->m_pPreloader->MapMethodSlot(CORINFO_METHOD_HANDLE(GetHandle())));
+    }
+
+    virtual ZapNodeType GetType()
+    {
+        return ZapNodeType_MethodSlot;
+    }
+};
+
+ZapNode * ZapWrapperTable::GetMethodSlot(CORINFO_METHOD_HANDLE handle)
+{
+    return GetPlaceHolder<ZapMethodSlot, ZapNodeType_MethodSlot>(handle);
+}
