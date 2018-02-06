@@ -46,6 +46,7 @@ enum ZapNodeType {
     ZapNodeType_AddrOfPInvokeFixup,
     ZapNodeType_GenericHandle,
     ZapNodeType_ModuleIDHandle,
+    ZapNodeType_MethodSlot,
 
 // Code references
 

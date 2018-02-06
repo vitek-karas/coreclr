@@ -4708,6 +4708,14 @@ DWORD CEEPreloader::MapModuleIDHandle(CORINFO_MODULE_HANDLE handle)
     return m_image->GetRVA(handle) + (DWORD)Module::GetOffsetOfModuleID();
 }
 
+DWORD CEEPreloader::MapMethodSlot(CORINFO_METHOD_HANDLE handle)
+{
+    STANDARD_VM_CONTRACT;
+
+    MethodDesc *pMD = GetMethod(handle);
+    return m_image->GetRVA((PVOID)pMD->GetAddrOfSlot());
+}
+
 CORINFO_METHOD_HANDLE CEEPreloader::NextUncompiledMethod()
 {
     STANDARD_VM_CONTRACT;

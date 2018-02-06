@@ -80,6 +80,31 @@ SIZE_T Precode::SizeOf(PrecodeType t)
     return 0;
 }
 
+BOOL Precode::IsZapped()
+{
+    LIMITED_METHOD_CONTRACT;
+    SUPPORTS_DAC;
+
+#ifdef FEATURE_PREJIT
+    return IsZapped((PTR_MethodDesc)GetMethodDesc());
+#else
+    return FALSE;
+#endif
+}
+
+BOOL Precode::IsZapped(PTR_MethodDesc pMD)
+{
+    LIMITED_METHOD_CONTRACT;
+    SUPPORTS_DAC;
+
+#ifdef FEATURE_PREJIT
+    Module * pZapModule = pMD->GetZapModule();
+    return (pZapModule != NULL) && pZapModule->IsZappedPrecode((PCODE)this);
+#else
+    return FALSE;
+#endif
+}
+
 // Note: This is immediate target of the precode. It does not follow jump stub if there is one.
 PCODE Precode::GetTarget()
 {

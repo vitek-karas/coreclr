@@ -4315,7 +4315,36 @@ void MethodTable::Save(DataImage *image, DWORD profilingFlags)
 
     if (HasNonVirtualSlotsArray())
     {
-        image->StoreStructure(GetNonVirtualSlotsArray(), GetNonVirtualSlotsArraySize(), DataImage::ITEM_VTABLE_CHUNK);
+        TADDR nonVirtualSlotsArray = (TADDR)GetNonVirtualSlotsArray();
+
+        ZapStoredStructure *pNonVirtualSlotsNode = 
+            image->StoreStructure((PVOID)nonVirtualSlotsArray, GetNonVirtualSlotsArraySize(), DataImage::ITEM_VTABLE_CHUNK);
+
+        // Record mapping of slot pointers to the nodes, so that we can look it up later on
+        // from ZapMethodSlot node.
+        unsigned numVtableSlots = GetNumVtableSlots();
+        for (unsigned slotNumber = GetNumVirtuals(); slotNumber < numVtableSlots; slotNumber++)
+        {
+            TADDR addrOfSlot = (TADDR)GetSlotPtr(slotNumber);
+            
+            // Skip the first slot since its addres is the same as the addres of the entire array
+            // and the pointer->node mapping infra validates that we don't map anything twice.
+            if (addrOfSlot == nonVirtualSlotsArray)
+            {
+                continue;
+            }
+
+            _ASSERTE(addrOfSlot > nonVirtualSlotsArray);
+            image->BindPointer((PVOID)addrOfSlot, pNonVirtualSlotsNode, addrOfSlot - nonVirtualSlotsArray);
+        }
+    }
+    else if (HasSingleNonVirtualSlot())
+    {
+        // Record mapping of slot pointers to the nodes, so that we can look it up later on
+        // from ZapMethodSlot node.
+        TADDR addrOfSlot = (TADDR)GetSlotPtr(GetNumVirtuals());
+        _ASSERTE(addrOfSlot > start);
+        image->BindPointer((void *)addrOfSlot, pMTNode, addrOfSlot - start);
     }
 
     if (HasInterfaceMap())

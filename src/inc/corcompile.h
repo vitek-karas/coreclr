@@ -1151,7 +1151,11 @@ class ICorCompilePreloader
 
     virtual DWORD MapModuleIDHandle(
             CORINFO_MODULE_HANDLE handle
-            )  = 0;
+            ) = 0;
+
+    virtual DWORD MapMethodSlot(
+            CORINFO_METHOD_HANDLE handle
+            ) = 0;
 
     // Load a method for the specified method def
     // If the class or method is generic, instantiate all parameters with <object>

@@ -556,6 +556,7 @@ class CEEPreloader : public ICorCompilePreloader
     DWORD MapAddressOfPInvokeFixup(CORINFO_METHOD_HANDLE handle);
     DWORD MapGenericHandle(CORINFO_GENERIC_HANDLE handle);    
     DWORD MapModuleIDHandle(CORINFO_MODULE_HANDLE handle);
+    DWORD MapMethodSlot(CORINFO_METHOD_HANDLE handle);
 
     void AddMethodToTransitiveClosureOfInstantiations(CORINFO_METHOD_HANDLE handle);
     void AddTypeToTransitiveClosureOfInstantiations(CORINFO_CLASS_HANDLE handle);

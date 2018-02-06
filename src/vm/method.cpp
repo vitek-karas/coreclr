@@ -579,9 +579,6 @@ PTR_PCODE MethodDesc::GetAddrOfSlot()
 
     if (HasNonVtableSlot())
     {
-        // Slots in NGened images are relative pointers
-        _ASSERTE(!IsZapped());
-
         SIZE_T size = GetBaseSize();
 
         return PTR_PCODE(dac_cast<TADDR>(this) + size);
@@ -2760,8 +2757,19 @@ void MethodDesc::Save(DataImage *image)
     }
 #endif // FEATURE_COMINTEROP
 
-    LOG((LF_ZAP, LL_INFO10000, "  MethodDesc::Save %S (%p) complete\n", s.GetUnicode(), this));
+    if (HasNonVtableSlot())
+    {
+        // Record mapping between the slot address and the node it's saved to
+        // so that we can look it up from ZapMethodSlot wrapper node.
+        TADDR addrOfSlot = (TADDR)GetAddrOfSlot();
+        SSIZE_T mdOffset;
+        ZapNode * pMDNode = image->GetNodeForStructure(this, &mdOffset);
+        _ASSERTE(addrOfSlot > (TADDR)this);
+        SSIZE_T slotOffset = mdOffset + (addrOfSlot - (TADDR)this);
+        image->BindPointer((PVOID)addrOfSlot, pMDNode, slotOffset);
+    }
 
+    LOG((LF_ZAP, LL_INFO10000, "  MethodDesc::Save %S (%p) complete\n", s.GetUnicode(), this));
 }
 
 //*******************************************************************************
