@@ -343,6 +343,8 @@ void ZapImage::AllocateVirtualSections()
             m_pDelayLoadInfoTableSection[i] = NewVirtualSection(pDataSection, IBCProfiledSection | HotRange | DelayLoadInfoTableSection, sizeof(TADDR));
         }
 
+        m_pPreloadSections[CORCOMPILE_SECTION_READONLY_VCHUNKS_AND_DICTIONARY] = NewVirtualSection(pDataSection, IBCProfiledSection | WarmRange | WriteableDataSection, sizeof(TADDR));
+
         m_pDynamicHelperCellSection = NewVirtualSection(pDataSection, IBCProfiledSection | HotColdSortedRange | ExternalMethodDataSection, sizeof(TADDR));
 
         m_pExternalMethodCellSection = NewVirtualSection(pDataSection, IBCProfiledSection | HotColdSortedRange | ExternalMethodThunkSection, sizeof(TADDR));
@@ -416,16 +418,6 @@ void ZapImage::AllocateVirtualSections()
         // they are neither completely hot, nor completely cold. 
         m_pVirtualImportThunkSection        = NewVirtualSection(pXDataSection, IBCProfiledSection | HotColdSortedRange | VirtualImportThunkSection, HELPER_TABLE_ALIGN);
         m_pHelperTableSection               = NewVirtualSection(pXDataSection, IBCProfiledSection | HotColdSortedRange| HelperTableSection, HELPER_TABLE_ALIGN);
-
-        // hot for writing, i.e. profiling has indicated a write to this item, so at least one write likely per item at some point
-        m_pPreloadSections[CORCOMPILE_SECTION_METHOD_PRECODE_WRITE] = NewVirtualSection(pXDataSection, IBCProfiledSection | HotRange | MethodPrecodeWriteSection, sizeof(TADDR));
-        m_pPreloadSections[CORCOMPILE_SECTION_METHOD_PRECODE_HOT] = NewVirtualSection(pXDataSection, IBCProfiledSection | HotRange | MethodPrecodeSection, sizeof(TADDR));
-
-        //
-        // cold sections
-        //
-        m_pPreloadSections[CORCOMPILE_SECTION_METHOD_PRECODE_COLD] = NewVirtualSection(pXDataSection, IBCProfiledSection | ColdRange | MethodPrecodeSection, sizeof(TADDR));
-        m_pPreloadSections[CORCOMPILE_SECTION_METHOD_PRECODE_COLD_WRITEABLE] = NewVirtualSection(pXDataSection, IBCProfiledSection | ColdRange | MethodPrecodeWriteableSection, sizeof(TADDR));
     }
 
     {
@@ -494,6 +486,16 @@ void ZapImage::AllocateVirtualSections()
 
         m_pStubsSection = NewVirtualSection(pTextSection, IBCProfiledSection | HotColdSortedRange | StubsSection);
         m_pReadOnlyDataSection = NewVirtualSection(pTextSection, IBCProfiledSection | HotColdSortedRange | ReadonlyDataSection);
+
+        // hot for writing, i.e. profiling has indicated a write to this item, so at least one write likely per item at some point
+        m_pPreloadSections[CORCOMPILE_SECTION_METHOD_PRECODE_WRITE] = NewVirtualSection(pTextSection, IBCProfiledSection | HotRange | MethodPrecodeWriteSection, sizeof(TADDR));
+        m_pPreloadSections[CORCOMPILE_SECTION_METHOD_PRECODE_HOT] = NewVirtualSection(pTextSection, IBCProfiledSection | HotRange | MethodPrecodeSection, sizeof(TADDR));
+
+        //
+        // cold sections
+        //
+        m_pPreloadSections[CORCOMPILE_SECTION_METHOD_PRECODE_COLD] = NewVirtualSection(pTextSection, IBCProfiledSection | ColdRange | MethodPrecodeSection, sizeof(TADDR));
+        m_pPreloadSections[CORCOMPILE_SECTION_METHOD_PRECODE_COLD_WRITEABLE] = NewVirtualSection(pTextSection, IBCProfiledSection | ColdRange | MethodPrecodeWriteableSection, sizeof(TADDR));
 
         m_pDynamicHelperDataSection = NewVirtualSection(pTextSection, IBCProfiledSection | HotColdSortedRange | ExternalMethodDataSection, sizeof(DWORD));
         m_pExternalMethodDataSection = NewVirtualSection(pTextSection, IBCProfiledSection | HotColdSortedRange | ExternalMethodDataSection, sizeof(DWORD));
@@ -573,7 +575,6 @@ void ZapImage::AllocateVirtualSections()
 #endif // defined(WIN64EXCEPTIONS)
 
         m_pPreloadSections[CORCOMPILE_SECTION_READONLY_WARM] = NewVirtualSection(pTextSection, IBCProfiledSection | WarmRange | ReadonlySection, sizeof(TADDR));
-        m_pPreloadSections[CORCOMPILE_SECTION_READONLY_VCHUNKS_AND_DICTIONARY] = NewVirtualSection(pTextSection, IBCProfiledSection | WarmRange | ReadonlySection, sizeof(TADDR));
 
         //
         // GC Info for methods which were not touched in profiling

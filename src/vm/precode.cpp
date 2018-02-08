@@ -98,6 +98,7 @@ BOOL Precode::IsZapped(PTR_MethodDesc pMD)
     SUPPORTS_DAC;
 
 #ifdef FEATURE_PREJIT
+    _ASSERTE(pMD == GetMethodDesc());
     Module * pZapModule = pMD->GetZapModule();
     return (pZapModule != NULL) && pZapModule->IsZappedPrecode((PCODE)this);
 #else
