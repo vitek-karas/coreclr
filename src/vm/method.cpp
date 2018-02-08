@@ -2186,6 +2186,12 @@ PCODE MethodDesc::TryGetMultiCallableAddrOfCode(CORINFO_ACCESS_FLAGS accessFlags
     if (MayHavePrecode())
         return GetOrCreatePrecode()->GetEntryPoint();
 
+    // If we got here, it means the method still has only a temporary entry point.
+    // Zapped temporary entry points (precodes) are not directly patchable (read/execute only)
+    // so in this case force the caller to go through a slot or funcptr stub.
+    if (IsZapped())
+        return NULL;
+
 #ifdef HAS_COMPACT_ENTRYPOINTS
     // Caller has to call via slot or allocate funcptr stub
     return NULL;
@@ -3328,6 +3334,11 @@ MethodDesc::Fixup(
 
         // Fixup the precode if we have stored it
         pPrecode->Fixup(image, this);
+
+        // Clear the HasPrecode flag on the saved MD. Saved precodes can't be used as stable entry points
+        // because they can't be directly patched (RX only), so we treat them as temporary entry points instead.
+        _ASSERTE(!pNewMD->HasStableEntryPoint());
+        pNewMD->m_bFlags2 &= ~enum_flag2_HasPrecode;
     }
 
     if (IsDynamicMethod())
@@ -3701,14 +3712,23 @@ void MethodDesc::SaveChunk::SaveOneChunk(COUNT_T start, COUNT_T count, ULONG siz
         pNewMD->m_chunkIndex = (BYTE) ((offset - sizeof(MethodDescChunk)) / MethodDesc::ALIGNMENT);
         _ASSERTE(pNewMD->GetMethodDescChunk() == pNewChunk);
 
-        pNewMD->m_bFlags2 |= enum_flag2_HasStableEntryPoint;
         if (pMethodInfo->m_fHasPrecode)
         {
             precodeSaveChunk.Save(m_pImage, pMD);
+
+            // Zapped precodes can't be patched (they are read/execute only) and so we can't use them
+            // as stable entry points (since we would go through PreStub all the time).
+            // So instead treat these as temporary entry points (no no stable entry point flag and no precode flag).
+            pNewMD->m_bFlags2 &= ~enum_flag2_HasStableEntryPoint;
+
+            // Mark the MD as having a precode for now (we need to remember this to call Fixup on the precode during
+            // the fixup phase). The MethodDesc::Fixup will clear it.
             pNewMD->m_bFlags2 |= enum_flag2_HasPrecode;
         }
         else
         {
+            // If the method doesn't have a precode, then its entry point is stable
+            pNewMD->m_bFlags2 |= enum_flag2_HasStableEntryPoint;
             pNewMD->m_bFlags2 &= ~enum_flag2_HasPrecode;
         }
 
@@ -4777,14 +4797,32 @@ Precode* MethodDesc::GetOrCreatePrecode()
     }
 
     PTR_PCODE pSlot = GetAddrOfSlot();
-    PCODE tempEntry = GetTemporaryEntryPoint();
+    PCODE pExpected;
+    if (IsZapped())
+    {
+        // If the method is zapped, then the only way it may not have a stable entry point yet
+        // is that it has a precode. In this case it's not marked as having precode through HasPrecode
+        // instead the precode acts as a temporary entry point.
+        pExpected = *pSlot;
+#ifdef FEATURE_PREJIT
+        Module * pZapModule = GetZapModule();
+        _ASSERTE((pZapModule != NULL) && pZapModule->IsZappedPrecode(pExpected));
+#endif
+    }
+    else
+    {
+        pExpected = GetTemporaryEntryPoint();
+    }
 
     PrecodeType requiredType = GetPrecodeType();
     PrecodeType availableType = PRECODE_INVALID;
 
-    if (!GetMethodDescChunk()->HasCompactEntryPoints())
+    // If the method has compact entry points the existing precode (the compact entry point) can't be patched.
+    // Also if the method is zapped it must have a zapped precode which can't be patched either.
+    // In both cases force creation of a new precode allocated at runtime, which can be patched.
+    if (!GetMethodDescChunk()->HasCompactEntryPoints() && !IsZapped())
     {
-        availableType = Precode::GetPrecodeFromEntryPoint(tempEntry)->GetType();
+        availableType = Precode::GetPrecodeFromEntryPoint(pExpected)->GetType();
     }
 
     // Allocate the precode if necessary
@@ -4796,7 +4834,7 @@ Precode* MethodDesc::GetOrCreatePrecode()
 
         AllocMemTracker amt;
         Precode* pPrecode = Precode::Allocate(requiredType, this, GetLoaderAllocator(), &amt);
-        if (FastInterlockCompareExchangePointer(EnsureWritablePages(pSlot), pPrecode->GetEntryPoint(), tempEntry) == tempEntry)
+        if (FastInterlockCompareExchangePointer(EnsureWritablePages(pSlot), pPrecode->GetEntryPoint(), pExpected) == pExpected)
             amt.SuppressRelease();
     }
 
@@ -4856,8 +4894,23 @@ BOOL MethodDesc::SetStableEntryPointInterlocked(PCODE addr)
 
     _ASSERTE(!HasPrecode());
 
-    PCODE pExpected = GetTemporaryEntryPoint();
     PTR_PCODE pSlot = GetAddrOfSlot();
+    PCODE pExpected;
+    if (IsZapped())
+    {
+        // If the method is zapped, then the only way it may not have a stable entry point yet
+        // is that it has a precode.
+        pExpected = *pSlot;
+#ifdef FEATURE_PREJIT
+        Module * pZapModule = GetZapModule();
+        _ASSERTE((pZapModule != NULL) && pZapModule->IsZappedPrecode(pExpected));
+#endif
+    }
+    else
+    {
+        pExpected = GetTemporaryEntryPoint();
+    }
+
     EnsureWritablePages(pSlot);
 
     BOOL fResult = FastInterlockCompareExchangePointer(pSlot, addr, pExpected) == pExpected;

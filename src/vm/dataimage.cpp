@@ -714,6 +714,7 @@ FORCEINLINE static CorCompileSection GetSectionForNodeType(ZapNodeType type)
         return CORCOMPILE_SECTION_READONLY_HOT;
 
     // SECTION_HOT_WRITEABLE
+    case NodeTypeForItemKind(DataImage::ITEM_METHOD_TABLE):
     case NodeTypeForItemKind(DataImage::ITEM_METHOD_DESC_HOT_WRITEABLE):
     case NodeTypeForItemKind(DataImage::ITEM_METHOD_TABLE_DATA_HOT_WRITEABLE):
     case NodeTypeForItemKind(DataImage::ITEM_NGEN_HASH_HOT):
@@ -737,7 +738,6 @@ FORCEINLINE static CorCompileSection GetSectionForNodeType(ZapNodeType type)
         return CORCOMPILE_SECTION_WARM;
 
     // SECTION_READONLY_WARM
-    case NodeTypeForItemKind(DataImage::ITEM_METHOD_TABLE):
     case NodeTypeForItemKind(DataImage::ITEM_INTERFACE_MAP):
     case NodeTypeForItemKind(DataImage::ITEM_DISPATCH_MAP):
     case NodeTypeForItemKind(DataImage::ITEM_GENERICS_STATIC_FIELDDESCS):
