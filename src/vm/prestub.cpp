@@ -1723,6 +1723,15 @@ PCODE MethodDesc::DoPrestub(MethodTable *pDispatchingMT)
     {
         pCode = GetStubForInteropMethod(this);
         
+        // Zapped methods can't patch the precodes, so they act as if they don't have one.
+        // Since for this to work, we need the precode (the pCode is a stub with methoddesc calling convention)
+        // we need to allocate one here.
+        // TODO: Backpatching - we probably need to patch all the possible slots this method lives in, not just the main one.
+        if (IsZapped() && !HasPrecode())
+        {
+            GetOrCreatePrecode();
+        }
+
         GetPrecode()->SetTargetInterlocked(pCode);
 
         RETURN GetStableEntryPoint();
