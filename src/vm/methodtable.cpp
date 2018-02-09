@@ -4301,15 +4301,27 @@ void MethodTable::Save(DataImage *image, DWORD profilingFlags)
     {
         if (!image->IsStored(it.GetIndirectionSlot()))
         {
+            ZapStoredStructure * pVTableChunkNode;
             if (CanInternVtableChunk(image, it))
-                image->StoreInternedStructure(it.GetIndirectionSlot(), it.GetSize(), DataImage::ITEM_VTABLE_CHUNK);
+                pVTableChunkNode = image->StoreInternedStructure(it.GetIndirectionSlot(), it.GetSize(), DataImage::ITEM_VTABLE_CHUNK);
             else
-                image->StoreStructure(it.GetIndirectionSlot(), it.GetSize(), DataImage::ITEM_VTABLE_CHUNK);
+                pVTableChunkNode = image->StoreStructure(it.GetIndirectionSlot(), it.GetSize(), DataImage::ITEM_VTABLE_CHUNK);
+
+            // Record mapping of slot pointers to the nodes, so that we can look it up later on
+            // from ZapMethodSlot node.
+            // Skip the first slot since its address is the same as the entire chunk which is already tracked.
+            for (unsigned index = 1; index < it.GetNumSlots(); index++)
+            {
+                image->BindPointer(it.GetIndirectionSlot() + index, pVTableChunkNode, sizeof(PCODE) * index);
+            }
         }
         else
         {
             // Tell the interning system that we have already shared this structure without its help
             image->NoteReusedStructure(it.GetIndirectionSlot());
+
+            // Note: No need to record mappings of the slots since we're sharing this chunk with another MT
+            // and the first MT to save this chunk would record mappings for its slots.
         }
     }
 
@@ -4323,17 +4335,13 @@ void MethodTable::Save(DataImage *image, DWORD profilingFlags)
         // Record mapping of slot pointers to the nodes, so that we can look it up later on
         // from ZapMethodSlot node.
         unsigned numVtableSlots = GetNumVtableSlots();
-        for (unsigned slotNumber = GetNumVirtuals(); slotNumber < numVtableSlots; slotNumber++)
+
+        // Skip the first slot since its address is the same as the address of the entire array
+        // and the pointer->node mapping infra validates that we don't map anything twice.
+        for (unsigned slotNumber = GetNumVirtuals() + 1; slotNumber < numVtableSlots; slotNumber++)
         {
             TADDR addrOfSlot = (TADDR)GetSlotPtr(slotNumber);
             
-            // Skip the first slot since its addres is the same as the addres of the entire array
-            // and the pointer->node mapping infra validates that we don't map anything twice.
-            if (addrOfSlot == nonVirtualSlotsArray)
-            {
-                continue;
-            }
-
             _ASSERTE(addrOfSlot > nonVirtualSlotsArray);
             image->BindPointer((PVOID)addrOfSlot, pNonVirtualSlotsNode, addrOfSlot - nonVirtualSlotsArray);
         }

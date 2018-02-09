@@ -67,7 +67,7 @@ EXTERN_C void STDCALL ThePreStubPatch();
 
 //==========================================================================
 
-PCODE MethodDesc::DoBackpatch(MethodTable * pMT, MethodTable *pDispatchingMT, BOOL fFullBackPatch)
+PCODE MethodDesc::DoBackpatch(MethodTable * pMT, MethodTable *pDispatchingMT, BOOL fFullBackPatch, PCODE pPreviousEntryPoint)
 {
     CONTRACTL
     {
@@ -79,10 +79,32 @@ PCODE MethodDesc::DoBackpatch(MethodTable * pMT, MethodTable *pDispatchingMT, BO
     CONTRACTL_END;
     PCODE pTarget = GetStableEntryPoint();
 
-    if (!HasTemporaryEntryPoint())
+    BOOL hasTemporaryLikeEntryPoint = FALSE;
+#ifdef FEATURE_PREJIT
+    if (IsZapped() && pPreviousEntryPoint != NULL)
+    {
+        // If we're patching a zapped method which had a zapped precode as its entrypoint
+        // then go and patch all the slots which are pointing to that precode.
+        // Treat the zapped precode as a temporary entry point - since it also can't be patched directly.
+        Module * pZapModule = GetZapModule();
+        if ((pZapModule != NULL) && pZapModule->IsZappedPrecode(pPreviousEntryPoint))
+        {
+            hasTemporaryLikeEntryPoint = TRUE;
+        }
+    }
+#endif
+    if (!hasTemporaryLikeEntryPoint && !HasTemporaryEntryPoint())
         return pTarget;
 
-    PCODE pExpected = GetTemporaryEntryPoint();
+    PCODE pExpected;
+    if (pPreviousEntryPoint != NULL)
+    {
+        pExpected = pPreviousEntryPoint;
+    }
+    else
+    {
+        pExpected = GetTemporaryEntryPoint();
+    }
 
     if (pExpected == pTarget)
         return pTarget;
@@ -1773,7 +1795,7 @@ PCODE MethodDesc::DoPrestub(MethodTable *pDispatchingMT)
 #if defined(FEATURE_JIT_PITCHING)
         MarkMethodNotPitchingCandidate(this);
 #endif
-        RETURN DoBackpatch(pMT, pDispatchingMT, TRUE);
+        RETURN DoBackpatch(pMT, pDispatchingMT, TRUE, NULL);
     }
     
     if (pCode)
@@ -1867,6 +1889,7 @@ PCODE MethodDesc::DoPrestub(MethodTable *pDispatchingMT)
     MemoryBarrier();
 #endif
 
+    PCODE pPreviousEntryPoint = NULL;
     if (pCode != NULL)
     {
         if (HasPrecode())
@@ -1874,7 +1897,7 @@ PCODE MethodDesc::DoPrestub(MethodTable *pDispatchingMT)
         else
             if (!HasStableEntryPoint())
             {
-                SetStableEntryPointInterlocked(pCode);
+                SetStableEntryPointInterlocked(pCode, &pPreviousEntryPoint);
             }
     }
     else
@@ -1895,7 +1918,7 @@ PCODE MethodDesc::DoPrestub(MethodTable *pDispatchingMT)
     _ASSERTE(!IsPointingToPrestub());
     _ASSERTE(HasStableEntryPoint());
 
-    RETURN DoBackpatch(pMT, pDispatchingMT, FALSE);
+    RETURN DoBackpatch(pMT, pDispatchingMT, FALSE, pPreviousEntryPoint);
 }
 
 #endif // !DACCESS_COMPILE

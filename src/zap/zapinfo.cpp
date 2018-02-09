@@ -1854,7 +1854,9 @@ BOOL ZapInfo::embedDirectCall(CORINFO_METHOD_HANDLE ftn,
     if (moduleHandle == m_pImage->m_hModule 
         && m_pImage->m_pPreloader->CanEmbedMethodHandle(ftn, m_currentMethodHandle))
     {
-        pEntryPointOrThunkToEmbed = m_pImage->m_pMethodEntryPoints->GetMethodEntryPoint(ftn, accessFlags);
+        pResult->accessType = IAT_PVALUE;
+        pResult->addr = m_pImage->GetWrappers()->GetMethodSlot(ftn);
+        return TRUE;
     }
     else  // otherwise we are calling into an external module
     {

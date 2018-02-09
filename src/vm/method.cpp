@@ -4885,7 +4885,7 @@ BOOL MethodDesc::SetNativeCodeInterlocked(PCODE addr, PCODE pExpected /*=NULL*/)
 }
 
 //*******************************************************************************
-BOOL MethodDesc::SetStableEntryPointInterlocked(PCODE addr)
+BOOL MethodDesc::SetStableEntryPointInterlocked(PCODE addr, PTR_PCODE ppPreviousEntryPoint /*=NULL*/)
 {
     CONTRACTL {
         THROWS;
@@ -4909,6 +4909,11 @@ BOOL MethodDesc::SetStableEntryPointInterlocked(PCODE addr)
     else
     {
         pExpected = GetTemporaryEntryPoint();
+    }
+
+    if (ppPreviousEntryPoint != NULL)
+    {
+        *ppPreviousEntryPoint = pExpected;
     }
 
     EnsureWritablePages(pSlot);
