@@ -2146,12 +2146,29 @@ PCODE MethodDesc::TryGetMultiCallableAddrOfCode(CORINFO_ACCESS_FLAGS accessFlags
 
     // We create stable entrypoints for these upfront
     if (IsWrapperStub() || IsEnCAddedMethod())
+    {
+        if (IsZapped() && !HasStableEntryPoint())
+        {
+            // If the method is zapped but doesn't have a stable entry point, then it must have
+            // a zapped precode. That precode is not patchable, so we can't make it a stable entry point.
+            // So instead force creation of runtime allocated precode which is patchable and which will
+            // become the stable entry point.
+            // TODO: How to solve the problem of patching all possible MT slots for this method.
+            // The GetOrCreatePrecode will only patch the main slot. If the method is called through
+            // some other slot it will end up in the zapped precode again and will probably never get patched.
+            GetOrCreatePrecode();
+        }
+
         return GetStableEntryPoint();
+    }
 
 
     // For EnC always just return the stable entrypoint so we can update the code
     if (IsEnCMethod())
+    {
+        _ASSERTE(!IsZapped());
         return GetStableEntryPoint();
+    }
 
     // If the method has already been jitted, we can give out the direct address
     // Note that we may have previously created a FuncPtrStubEntry, but
