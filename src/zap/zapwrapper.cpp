@@ -206,7 +206,7 @@ class ZapMethodSlot : public ZapWrapper
 public:
     virtual void Resolve(ZapImage * pImage)
     {
-        SetRVA(pImage->m_pPreloader->MapMethodSlot(CORINFO_METHOD_HANDLE(GetHandle())));
+        SetRVA(pImage->m_pPreloader->MapMethodSlot(CORINFO_METHOD_HANDLE((BYTE *)GetHandle() - 2)));
     }
 
     virtual ZapNodeType GetType()
@@ -217,5 +217,8 @@ public:
 
 ZapNode * ZapWrapperTable::GetMethodSlot(CORINFO_METHOD_HANDLE handle)
 {
-    return GetPlaceHolder<ZapMethodSlot, ZapNodeType_MethodSlot>(handle);
+    // Disambiguate the normal method handle and address of P/Invoke fixup by adding 2
+    // The handle is effectively a pointer to the MD, so handle + 2 still fits into the size of the MD
+    // and can't run into a different method.
+    return GetPlaceHolder<ZapMethodSlot, ZapNodeType_MethodSlot>((BYTE *)handle + 2);
 }

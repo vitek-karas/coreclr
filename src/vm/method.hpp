@@ -250,7 +250,7 @@ public:
         return GetMethodEntryPoint();
     }
 
-    BOOL SetStableEntryPointInterlocked(PCODE addr);
+    BOOL SetStableEntryPointInterlocked(PCODE addr, PTR_PCODE ppPreviousEntryPoint = NULL);
 
     BOOL HasTemporaryEntryPoint();
     PCODE GetTemporaryEntryPoint();
@@ -1635,11 +1635,13 @@ public:
     //     pDispatchingMT - method table of the object that the method is being dispatched on, can be NULL.
     //     fFullBackPatch - indicates whether to patch all possible slots, including the ones 
     //                      expensive to patch
+    //     pPreviousEntryPoint - if this is not NULL, the value is used as the expected value for all the patching
+    //                           that is slots with this value will be patched.
     //                      
     // Return value:
     //     stable entry point (code:MethodDesc::GetStableEntryPoint())
     //
-    PCODE DoBackpatch(MethodTable * pMT, MethodTable * pDispatchingMT, BOOL fFullBackPatch);
+    PCODE DoBackpatch(MethodTable * pMT, MethodTable * pDispatchingMT, BOOL fFullBackPatch, PCODE pPreviousEntryPoint);
 
     PCODE DoPrestub(MethodTable *pDispatchingMT);
 
