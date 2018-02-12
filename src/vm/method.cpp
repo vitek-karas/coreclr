@@ -4826,7 +4826,7 @@ Precode* MethodDesc::GetOrCreatePrecode()
         {
             // This should really only happen if there is a race between two threads calling GetOrCreatePrecode at the same time.
             // In that case the slot should either contain the zapped precode, or the newly allocated runtime precode.
-            // So try to "reuse" the precode - this should always suceed, since we should not need a differe precode type.
+            // So try to "reuse" the runtime allocated precode - this should always succeed, since we should not need a different precode type.
             availableType = Precode::GetPrecodeFromEntryPoint(pExpected)->GetType();
         }
 

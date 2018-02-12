@@ -79,7 +79,7 @@ PCODE MethodDesc::DoBackpatch(MethodTable * pMT, MethodTable *pDispatchingMT, BO
     CONTRACTL_END;
     PCODE pTarget = GetStableEntryPoint();
 
-    BOOL hasTemporaryLikeEntryPoint = FALSE;
+    BOOL hasZappedPrecodeEntryPoint = FALSE;
 #ifdef FEATURE_PREJIT
     if (IsZapped() && pPreviousEntryPoint != NULL)
     {
@@ -89,11 +89,11 @@ PCODE MethodDesc::DoBackpatch(MethodTable * pMT, MethodTable *pDispatchingMT, BO
         Module * pZapModule = GetZapModule();
         if ((pZapModule != NULL) && pZapModule->IsZappedPrecode(pPreviousEntryPoint))
         {
-            hasTemporaryLikeEntryPoint = TRUE;
+            hasZappedPrecodeEntryPoint = TRUE;
         }
     }
 #endif
-    if (!hasTemporaryLikeEntryPoint && !HasTemporaryEntryPoint())
+    if (!hasZappedPrecodeEntryPoint && !HasTemporaryEntryPoint())
         return pTarget;
 
     PCODE pExpected;
@@ -128,8 +128,11 @@ PCODE MethodDesc::DoBackpatch(MethodTable * pMT, MethodTable *pDispatchingMT, BO
         }
 
 #ifndef HAS_COMPACT_ENTRYPOINTS
-        // Patch the fake entrypoint if necessary
-        Precode::GetPrecodeFromEntryPoint(pExpected)->SetTargetInterlocked(pTarget);
+        if (!hasZappedPrecodeEntryPoint)
+        {
+            // Patch the fake entrypoint if necessary
+            Precode::GetPrecodeFromEntryPoint(pExpected)->SetTargetInterlocked(pTarget);
+        }
 #endif // HAS_COMPACT_ENTRYPOINTS
     }
 
