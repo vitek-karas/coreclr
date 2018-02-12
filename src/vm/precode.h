@@ -99,10 +99,6 @@ private:
         return dac_cast<TADDR>(this);
     }
 
-#ifdef FEATURE_PREJIT
-    BOOL SetZappedTargetInterlocked(PTR_MethodDesc pMD, PCODE pTarget, PCODE pExpected);
-#endif
-
     static void UnexpectedPrecodeType(const char * originator, PrecodeType precodeType)
 
     {
