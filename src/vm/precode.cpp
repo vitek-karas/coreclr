@@ -86,19 +86,7 @@ BOOL Precode::IsZapped()
     SUPPORTS_DAC;
 
 #ifdef FEATURE_PREJIT
-    return IsZapped((PTR_MethodDesc)GetMethodDesc());
-#else
-    return FALSE;
-#endif
-}
-
-BOOL Precode::IsZapped(PTR_MethodDesc pMD)
-{
-    LIMITED_METHOD_CONTRACT;
-    SUPPORTS_DAC;
-
-#ifdef FEATURE_PREJIT
-    _ASSERTE(pMD == GetMethodDesc());
+    PTR_MethodDesc pMD = (PTR_MethodDesc)GetMethodDesc();
     Module * pZapModule = pMD->GetZapModule();
     return (pZapModule != NULL) && pZapModule->IsZappedPrecode((PCODE)this);
 #else
@@ -115,17 +103,13 @@ PCODE Precode::GetTarget()
     PCODE target = NULL;
 
     PrecodeType precodeType = GetType();
-#ifdef FEATURE_PREJIT
-    PTR_MethodDesc pMD;
-#endif
     switch (precodeType)
     {
     case PRECODE_STUB:
 #ifdef FEATURE_PREJIT
-        pMD = (PTR_MethodDesc)AsStubPrecode()->GetMethodDesc();
-        if (IsZapped(pMD))
+        if (IsZapped())
         {
-            target = pMD->GetMethodEntryPoint();
+            target = GetMethodDesc()->GetMethodEntryPoint();
             if (target != this->GetEntryPoint())
             {
                 break;
@@ -137,10 +121,9 @@ PCODE Precode::GetTarget()
 #ifdef HAS_REMOTING_PRECODE
     case PRECODE_REMOTING:
 #ifdef FEATURE_PREJIT
-        pMD = (PTR_MethodDesc)AsRemotingPrecode()->GetMethodDesc();
-        if (IsZapped(pMD))
+        if (IsZapped())
         {
-            target = pMD->GetMethodEntryPoint();
+            target = GetMethodDesc()->GetMethodEntryPoint();
             if (target != this->GetEntryPoint())
             {
                 break;
@@ -153,10 +136,9 @@ PCODE Precode::GetTarget()
 #ifdef HAS_FIXUP_PRECODE
     case PRECODE_FIXUP:
 #ifdef FEATURE_PREJIT
-        pMD = (PTR_MethodDesc)AsFixupPrecode()->GetMethodDesc();
-        if (IsZapped(pMD))
+        if (IsZapped())
         {
-            target = pMD->GetMethodEntryPoint();
+            target = GetMethodDesc()->GetMethodEntryPoint();
             if (target != this->GetEntryPoint())
             {
                 break;
@@ -546,17 +528,13 @@ BOOL Precode::SetTargetInterlocked(PCODE target, BOOL fOnlyRedirectFromPrestub)
     g_IBCLogger.LogMethodPrecodeWriteAccess(GetMethodDesc());
 
     PrecodeType precodeType = GetType();
-#ifdef FEATURE_PREJIT
-    PTR_MethodDesc pMD;
-#endif
     switch (precodeType)
     {
     case PRECODE_STUB:
 #ifdef FEATURE_PREJIT
-        pMD = (PTR_MethodDesc)AsStubPrecode()->GetMethodDesc();
-        if (IsZapped(pMD))
+        if (IsZapped())
         {
-            SetZappedTargetInterlocked(pMD, target, expected);
+            SetZappedTargetInterlocked(GetMethodDesc(), target, expected);
         }
         else
 #endif
@@ -584,10 +562,9 @@ BOOL Precode::SetTargetInterlocked(PCODE target, BOOL fOnlyRedirectFromPrestub)
 #ifdef HAS_FIXUP_PRECODE
     case PRECODE_FIXUP:
 #ifdef FEATURE_PREJIT
-        pMD = (PTR_MethodDesc)AsFixupPrecode()->GetMethodDesc();
-        if (IsZapped(pMD))
+        if (IsZapped())
         {
-            SetZappedTargetInterlocked(pMD, target, expected);
+            SetZappedTargetInterlocked(GetMethodDesc(), target, expected);
         }
         else
 #endif
