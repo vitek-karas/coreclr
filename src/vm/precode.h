@@ -262,9 +262,6 @@ public:
 
     // Determines if the precode is part of a native image
     BOOL IsZapped();
-    // Determines if the precode is part of a native image
-    // Optimization if the caller already has the precode's MethodDesc available.
-    BOOL IsZapped(PTR_MethodDesc pMD);
 
     static Precode* Allocate(PrecodeType t, MethodDesc* pMD,
         LoaderAllocator *pLoaderAllocator, AllocMemTracker *pamTracker);

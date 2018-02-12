@@ -2147,18 +2147,14 @@ PCODE MethodDesc::TryGetMultiCallableAddrOfCode(CORINFO_ACCESS_FLAGS accessFlags
     // We create stable entrypoints for these upfront
     if (IsWrapperStub() || IsEnCAddedMethod())
     {
-        if (IsZapped() && !HasStableEntryPoint())
-        {
-            // If the method is zapped but doesn't have a stable entry point, then it must have
-            // a zapped precode. That precode is not patchable, so we can't make it a stable entry point.
-            // So instead force creation of runtime allocated precode which is patchable and which will
-            // become the stable entry point.
-            // TODO: How to solve the problem of patching all possible MT slots for this method.
-            // The GetOrCreatePrecode will only patch the main slot. If the method is called through
-            // some other slot it will end up in the zapped precode again and will probably never get patched.
-            GetOrCreatePrecode();
-        }
-
+        // If this is runtime JITed method then it should already have a precode
+        // since we should have created a stable entry point for it by now.
+        // If the method is zapped but doesn't have a stable entry point, then it must have
+        // a zapped precode. That precode is not patchable, so we can't make it a stable entry point.
+        // So instead force creation of runtime allocated precode which is patchable and which will
+        // become the stable entry point.
+        _ASSERTE(HasPrecode() || (IsZapped() && !HasStableEntryPoint()));
+        GetOrCreatePrecode();
         return GetStableEntryPoint();
     }
 
@@ -4813,33 +4809,40 @@ Precode* MethodDesc::GetOrCreatePrecode()
         return GetPrecode();
     }
 
+    PrecodeType requiredType = GetPrecodeType();
+    PrecodeType availableType = PRECODE_INVALID;
+
     PTR_PCODE pSlot = GetAddrOfSlot();
     PCODE pExpected;
+#ifdef FEATURE_PREJIT
     if (IsZapped())
     {
         // If the method is zapped, then the only way it may not have a stable entry point yet
         // is that it has a precode. In this case it's not marked as having precode through HasPrecode
-        // instead the precode acts as a temporary entry point.
+        // instead the zapped precode acts as a temporary entry point.
         pExpected = *pSlot;
-#ifdef FEATURE_PREJIT
         Module * pZapModule = GetZapModule();
-        _ASSERTE((pZapModule != NULL) && pZapModule->IsZappedPrecode(pExpected));
-#endif
+        if ((pZapModule == NULL) || !pZapModule->IsZappedPrecode(pExpected))
+        {
+            // This should really only happen if there is a race between two threads calling GetOrCreatePrecode at the same time.
+            // In that case the slot should either contain the zapped precode, or the newly allocated runtime precode.
+            // So try to "reuse" the precode - this should always suceed, since we should not need a differe precode type.
+            availableType = Precode::GetPrecodeFromEntryPoint(pExpected)->GetType();
+        }
+
+        // Otherwise, force creation of a runtime allocated precode which can act as a stable entrypoint.
+        // - keep availableType = PRECODE_INVALID.
     }
     else
+#endif
     {
         pExpected = GetTemporaryEntryPoint();
-    }
 
-    PrecodeType requiredType = GetPrecodeType();
-    PrecodeType availableType = PRECODE_INVALID;
-
-    // If the method has compact entry points the existing precode (the compact entry point) can't be patched.
-    // Also if the method is zapped it must have a zapped precode which can't be patched either.
-    // In both cases force creation of a new precode allocated at runtime, which can be patched.
-    if (!GetMethodDescChunk()->HasCompactEntryPoints() && !IsZapped())
-    {
-        availableType = Precode::GetPrecodeFromEntryPoint(pExpected)->GetType();
+        // If the method has compact entry points the existing precode (the compact entry point) can't be patched.
+        if (!GetMethodDescChunk()->HasCompactEntryPoints() && !IsZapped())
+        {
+            availableType = Precode::GetPrecodeFromEntryPoint(pExpected)->GetType();
+        }
     }
 
     // Allocate the precode if necessary
@@ -4913,17 +4916,24 @@ BOOL MethodDesc::SetStableEntryPointInterlocked(PCODE addr, PTR_PCODE ppPrevious
 
     PTR_PCODE pSlot = GetAddrOfSlot();
     PCODE pExpected;
+#ifdef FEATURE_PREJIT
     if (IsZapped())
     {
         // If the method is zapped, then the only way it may not have a stable entry point yet
         // is that it has a precode.
         pExpected = *pSlot;
-#ifdef FEATURE_PREJIT
         Module * pZapModule = GetZapModule();
-        _ASSERTE((pZapModule != NULL) && pZapModule->IsZappedPrecode(pExpected));
-#endif
+        if ((pZapModule == NULL) || !pZapModule->IsZappedPrecode(pExpected))
+        {
+            // This should really only happen if there is a race between two threads calling GetOrCreatePrecode at the same time.
+            // In that case the slot should either contain the zapped precode, or the newly allocated runtime precode.
+            // This is basically the same situation as if we run into a race right at the InterlockComparedExchange below.
+            // So set the expected to NULL which should never match the content of the slot and thus will fail the compare exchange below.
+            pExpected = NULL;
+        }
     }
     else
+#endif
     {
         pExpected = GetTemporaryEntryPoint();
     }
