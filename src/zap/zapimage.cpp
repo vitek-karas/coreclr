@@ -117,8 +117,8 @@ ZapImage::~ZapImage()
     if (m_pInnerPtrs != NULL) 
         m_pInnerPtrs->~ZapInnerPtrTable();
 
-    if (m_pMethodEntryPoints != NULL)
-        m_pMethodEntryPoints->~ZapMethodEntryPointTable();
+    if (m_pMethodSlots != NULL)
+        m_pMethodSlots->~ZapMethodSlotTable();
 
     if (m_pWrappers != NULL) 
         m_pWrappers->~ZapWrapperTable();
@@ -185,7 +185,7 @@ void ZapImage::InitializeSections()
     // Initialization of auxiliary tables in alphabetical order
     //
     m_pInnerPtrs = new (GetHeap()) ZapInnerPtrTable(this);
-    m_pMethodEntryPoints = new (GetHeap()) ZapMethodEntryPointTable(this);
+    m_pMethodSlots = new (GetHeap()) ZapMethodSlotTable(this);
     m_pWrappers = new (GetHeap()) ZapWrapperTable(this);
 
     // Place the virtual sections tables in debug section. It exists for diagnostic purposes
@@ -663,7 +663,7 @@ void ZapImage::Preallocate()
     //
     m_pImportTable->Preallocate(cbILImage);
     m_pInnerPtrs->Preallocate(cbILImage);
-    m_pMethodEntryPoints->Preallocate(cbILImage);
+    m_pMethodSlots->Preallocate(cbILImage);
     m_pWrappers->Preallocate(cbILImage);
 
     if (m_pILMetaData != NULL)
@@ -744,7 +744,7 @@ void ZapImage::ComputeRVAs()
 
     if (!IsReadyToRunCompilation())
     {
-        m_pMethodEntryPoints->Resolve();
+        m_pMethodSlots->Resolve();
         m_pWrappers->Resolve();
     }
 

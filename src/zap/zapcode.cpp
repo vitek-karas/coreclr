@@ -226,12 +226,13 @@ void ZapImage::OutputCode(CodeType codeType)
                         m_pStubDispatchDataTable->PlaceStubDispatchCell((ZapImport *)pTarget);
                     }
                     break;
-                case ZapNodeType_MethodEntryPoint:
-                    pTarget = m_pMethodEntryPoints->CanDirectCall((ZapMethodEntryPoint *)pTarget, pMethod);
-                    if (pTarget != NULL)
-                    {
-                        pReloc->m_pTargetNode = pTarget;
-                    }
+                case ZapNodeType_MethodSlot:
+                    ((ZapMethodSlot *)pTarget)->SetIsUsed();
+                    //pTarget = m_pMethodSlots->CanDirectCall((ZapMethodSlot *)pTarget, pMethod);
+                    //if (pTarget != NULL)
+                    //{
+                        //pReloc->m_pTargetNode = pTarget;
+                    //}
                     break;
                 case ZapNodeType_Stub:
                     if (!pTarget->IsPlaced())
@@ -927,9 +928,9 @@ BOOL ZapMethodHeader::PartialTargetMethodIterator::GetNext(CORINFO_METHOD_HANDLE
             type = pTarget->GetType();
         }
 
-        if (type == ZapNodeType_MethodEntryPoint)
+        if (type == ZapNodeType_MethodSlot)
         {
-            *pHnd = ((ZapMethodEntryPoint *)pTarget)->GetHandle();
+            *pHnd = ((ZapMethodSlot *)pTarget)->GetHandle();
             return TRUE;
         }
     }
@@ -976,15 +977,15 @@ void ZapCodeMethodDescs::Save(ZapWriter * pZapWriter)
 // ZapMethodEntryPoint
 //
 
-void ZapMethodEntryPoint::Resolve(ZapImage * pImage)
+void ZapMethodSlot::Resolve(ZapImage * pImage)
 {
-    DWORD rvaValue = pImage->m_pPreloader->MapMethodEntryPoint(GetHandle());
+    DWORD rvaValue = pImage->m_pPreloader->MapMethodSlot(GetHandle());
 #ifdef _DEBUG
     if (rvaValue == NULL)
     {
         mdMethodDef token;
         pImage->GetCompileInfo()->GetMethodDef(GetHandle(), &token);
-        pImage->Error(token, S_OK, 0, W("MapMethodEntryPoint failed"));
+        pImage->Error(token, S_OK, 0, W("MapMethodSlot failed"));
     }
     else
 #endif
@@ -993,44 +994,44 @@ void ZapMethodEntryPoint::Resolve(ZapImage * pImage)
     }
 }
 
-ZapMethodEntryPoint * ZapMethodEntryPointTable::GetMethodEntryPoint(CORINFO_METHOD_HANDLE handle, CORINFO_ACCESS_FLAGS accessFlags)
+ZapMethodSlot * ZapMethodSlotTable::GetMethodSlot(CORINFO_METHOD_HANDLE handle, CORINFO_ACCESS_FLAGS accessFlags)
 {
-    ZapMethodEntryPoint * pMethodEntryPoint = m_entries.Lookup(MethodEntryPointKey(handle, accessFlags));
+    ZapMethodSlot * pMethodSlot = m_entries.Lookup(MethodSlotKey(handle, accessFlags));
 
-    if (pMethodEntryPoint != NULL)
-        return pMethodEntryPoint;
+    if (pMethodSlot != NULL)
+        return pMethodSlot;
 
 #ifdef _DEBUG
     mdMethodDef token;
     m_pImage->GetCompileInfo()->GetMethodDef(handle, &token);
 #endif
 
-    pMethodEntryPoint = new (m_pImage->GetHeap()) ZapMethodEntryPoint(handle, accessFlags);
-    m_entries.Add(pMethodEntryPoint);
-    return pMethodEntryPoint;
+    pMethodSlot = new (m_pImage->GetHeap()) ZapMethodSlot(handle, accessFlags);
+    m_entries.Add(pMethodSlot);
+    return pMethodSlot;
 }
 
-void ZapMethodEntryPointTable::Resolve()
+void ZapMethodSlotTable::Resolve()
 {
-    for (MethodEntryPointTable::Iterator i = m_entries.Begin(), end = m_entries.End(); i != end; i++)
+    for (MethodSlotTable::Iterator i = m_entries.Begin(), end = m_entries.End(); i != end; i++)
     {
-        ZapMethodEntryPoint * pMethodEntryPoint = *i;
+        ZapMethodSlot * pMethodSlot = *i;
 
-        // Skip unused entrypoints - they may be omitted in the image
-        if (!pMethodEntryPoint->IsUsed())
+        // Skip unused slots - they may be omitted in the image
+        if (!pMethodSlot->IsUsed())
             continue;
 
-        pMethodEntryPoint->Resolve(m_pImage);
+        pMethodSlot->Resolve(m_pImage);
     }
 }
 
-ZapNode * ZapMethodEntryPointTable::CanDirectCall(ZapMethodEntryPoint * pMethodEntryPoint, ZapMethodHeader * pCaller)
+ZapNode * ZapMethodSlotTable::CanDirectCall(ZapMethodSlot * pMethodSlot, ZapMethodHeader * pCaller)
 {
     CORINFO_METHOD_HANDLE caller = pCaller->GetHandle();
-    CORINFO_METHOD_HANDLE callee = pMethodEntryPoint->GetHandle();
+    CORINFO_METHOD_HANDLE callee = pMethodSlot->GetHandle();
 
     CorInfoIndirectCallReason reason;
-    if (m_pImage->canIntraModuleDirectCall(caller, callee, &reason, pMethodEntryPoint->GetAccessFlags()))
+    if (m_pImage->canIntraModuleDirectCall(caller, callee, &reason, pMethodSlot->GetAccessFlags()))
     {
         ZapNode * pCode = m_pImage->GetCompiledMethod(callee)->GetCode();
 #ifdef _TARGET_ARM_
@@ -1040,11 +1041,11 @@ ZapNode * ZapMethodEntryPointTable::CanDirectCall(ZapMethodEntryPoint * pMethodE
     }
     else
     {
-        if (!pMethodEntryPoint->IsUsed())
+        if (!pMethodSlot->IsUsed())
         {
-            // This method entry point is going to be used for indirect call.
+            // This method slot is going to be used for indirect call.
             // Record this so that later we will assign it an RVA.
-            pMethodEntryPoint->SetIsUsed();
+            pMethodSlot->SetIsUsed();
         }
         return NULL;
     }

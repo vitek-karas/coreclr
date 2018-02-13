@@ -24,7 +24,7 @@ class ZapCodeManagerEntry;
 class ZapReadyToRunHeader;
 
 class ZapInnerPtrTable;
-class ZapMethodEntryPointTable;
+class ZapMethodSlotTable;
 class ZapWrapperTable;
 
 class ZapBaseRelocs;
@@ -259,7 +259,7 @@ private:
 
     ZapInnerPtrTable *          m_pInnerPtrs;
 
-    ZapMethodEntryPointTable *  m_pMethodEntryPoints;
+    ZapMethodSlotTable *        m_pMethodSlots;
 
     ZapWrapperTable *           m_pWrappers;
 
