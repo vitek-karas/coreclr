@@ -39,14 +39,13 @@ enum ZapNodeType {
 
 // PlaceHolders
 
-    ZapNodeType_MethodEntryPoint,
+    ZapNodeType_MethodSlot,
     ZapNodeType_ClassHandle,
     ZapNodeType_MethodHandle,
     ZapNodeType_FieldHandle,
     ZapNodeType_AddrOfPInvokeFixup,
     ZapNodeType_GenericHandle,
     ZapNodeType_ModuleIDHandle,
-    ZapNodeType_MethodSlot,
 
 // Code references
 

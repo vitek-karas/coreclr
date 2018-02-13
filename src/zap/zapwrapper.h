@@ -133,7 +133,6 @@ public:
     ZapNode * GetAddrOfPInvokeFixup(CORINFO_METHOD_HANDLE handle);
     ZapNode * GetGenericHandle(CORINFO_GENERIC_HANDLE handle);
     ZapNode * GetModuleIDHandle(CORINFO_MODULE_HANDLE handle);
-    ZapNode * GetMethodSlot(CORINFO_METHOD_HANDLE handle);
 
     ZapNode * GetStub(void * pStub);
 

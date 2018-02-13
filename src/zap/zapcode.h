@@ -241,23 +241,21 @@ public:
 // carries extra CORINFO_ACCESS_FLAGS that is used to opt into the direct call even
 // when it would not be otherwise possible.
 //
-class ZapMethodEntryPoint : public ZapNode
+class ZapMethodSlot : public ZapNode
 {
     CORINFO_METHOD_HANDLE   m_handle;       // Target method being called
     BYTE                    m_accessFlags;  // CORINFO_ACCESS_FLAGS
     BYTE                    m_fUsed;        // Entrypoint is used - needs to be resolved
 
-    ZapNode                *m_pEntryPoint;  // only used for abstract methods to remember the precode
-
 public:
-    ZapMethodEntryPoint(CORINFO_METHOD_HANDLE handle, CORINFO_ACCESS_FLAGS accessFlags)
+    ZapMethodSlot(CORINFO_METHOD_HANDLE handle, CORINFO_ACCESS_FLAGS accessFlags)
         : m_handle(handle), m_accessFlags(static_cast<BYTE>(accessFlags))
     {
     }
 
     virtual ZapNodeType GetType()
     {
-        return ZapNodeType_MethodEntryPoint;
+        return ZapNodeType_MethodSlot;
     }
 
     CORINFO_METHOD_HANDLE GetHandle()
@@ -280,14 +278,19 @@ public:
         return m_fUsed;
     }
 
+    virtual ZapNode * GetBase()
+    {
+        return this;
+    }
+
     void Resolve(ZapImage * pImage);
 };
 
-class ZapMethodEntryPointTable
+class ZapMethodSlotTable
 {
-    struct MethodEntryPointKey
+    struct MethodSlotKey
     {
-        MethodEntryPointKey(CORINFO_METHOD_HANDLE handle, CORINFO_ACCESS_FLAGS accessFlags)
+        MethodSlotKey(CORINFO_METHOD_HANDLE handle, CORINFO_ACCESS_FLAGS accessFlags)
             : m_handle(handle), m_accessFlags(accessFlags)
         {
         }
@@ -296,15 +299,15 @@ class ZapMethodEntryPointTable
         CORINFO_ACCESS_FLAGS    m_accessFlags;
     };
 
-    class MethodEntryPointTraits : public NoRemoveSHashTraits< DefaultSHashTraits<ZapMethodEntryPoint *> >
+    class MethodSlotTraits : public NoRemoveSHashTraits< DefaultSHashTraits<ZapMethodSlot *> >
     {
     public:
-        typedef MethodEntryPointKey key_t;
+        typedef MethodSlotKey key_t;
 
         static key_t GetKey(element_t e)
         { 
             LIMITED_METHOD_CONTRACT;
-            return MethodEntryPointKey(e->GetHandle(), e->GetAccessFlags());
+            return MethodSlotKey(e->GetHandle(), e->GetAccessFlags());
         }
         static BOOL Equals(key_t k1, key_t k2) 
         { 
@@ -321,25 +324,25 @@ class ZapMethodEntryPointTable
         static bool IsNull(const element_t &e) { LIMITED_METHOD_CONTRACT; return e == NULL; }
     };
 
-    typedef SHash< MethodEntryPointTraits > MethodEntryPointTable;
+    typedef SHash< MethodSlotTraits > MethodSlotTable;
 
-    MethodEntryPointTable m_entries;
+    MethodSlotTable m_entries;
     ZapImage * m_pImage;
 
 public:
-    ZapMethodEntryPointTable(ZapImage * pImage)
+    ZapMethodSlotTable(ZapImage * pImage)
         : m_pImage(pImage)
     {
     }
 
     void Preallocate(COUNT_T cbILImage)
     {
-        PREALLOCATE_HASHTABLE(ZapMethodEntryPointTable::m_entries, 0.0018, cbILImage);
+        PREALLOCATE_HASHTABLE(ZapMethodSlotTable::m_entries, 0.0018, cbILImage);
     }
 
-    ZapMethodEntryPoint * GetMethodEntryPoint(CORINFO_METHOD_HANDLE handle, CORINFO_ACCESS_FLAGS accessFlags);
+    ZapMethodSlot * GetMethodSlot(CORINFO_METHOD_HANDLE handle, CORINFO_ACCESS_FLAGS accessFlags);
 
-    ZapNode * CanDirectCall(ZapMethodEntryPoint * pMethodEntryPoint, ZapMethodHeader * pCaller);
+    ZapNode * CanDirectCall(ZapMethodSlot * pMethodEntryPoint, ZapMethodHeader * pCaller);
 
     void Resolve();
 };

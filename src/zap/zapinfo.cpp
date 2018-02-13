@@ -326,8 +326,8 @@ void ZapInfo::ProcessReferences()
 
         switch (type)
         {
-        case ZapNodeType_MethodEntryPoint:
-            hMethod = ((ZapMethodEntryPoint*)pTarget)->GetHandle();
+        case ZapNodeType_MethodSlot:
+            hMethod = ((ZapMethodSlot*)pTarget)->GetHandle();
 
             if (m_pImage->m_pPreloader->DoesMethodNeedRestoringBeforePrestubIsRun(hMethod))
             {
@@ -719,7 +719,7 @@ COUNT_T ZapImage::MethodCodeTraits::Hash(key_t k)
             // these in the hash code.
             switch (type)
             {
-            case ZapNodeType_MethodEntryPoint:
+            case ZapNodeType_MethodSlot:
             case ZapNodeType_ExternalMethodThunk:
             case ZapNodeType_ClassHandle:
             case ZapNodeType_Import_ClassHandle:
@@ -1845,8 +1845,6 @@ BOOL ZapInfo::embedDirectCall(CORINFO_METHOD_HANDLE ftn,
         return FALSE;
     }
 
-    ZapNode * pEntryPointOrThunkToEmbed = NULL;
-
     //
     // If it's in the same module then we can call it directly
     //
@@ -1855,7 +1853,7 @@ BOOL ZapInfo::embedDirectCall(CORINFO_METHOD_HANDLE ftn,
         && m_pImage->m_pPreloader->CanEmbedMethodHandle(ftn, m_currentMethodHandle))
     {
         pResult->accessType = IAT_PVALUE;
-        pResult->addr = m_pImage->GetWrappers()->GetMethodSlot(ftn);
+        pResult->addr = m_pImage->m_pMethodSlots->GetMethodSlot(ftn, accessFlags);
         return TRUE;
     }
     else  // otherwise we are calling into an external module
@@ -1869,14 +1867,6 @@ BOOL ZapInfo::embedDirectCall(CORINFO_METHOD_HANDLE ftn,
         pResult->addr = m_pImage->GetImportTable()->GetExternalMethodCell(ftn);
         return TRUE;
     }
-
-#ifdef _TARGET_ARM_
-    pEntryPointOrThunkToEmbed = m_pImage->GetInnerPtr(pEntryPointOrThunkToEmbed, THUMB_CODE);
-#endif
-
-    pResult->accessType = IAT_VALUE;
-    pResult->addr = pEntryPointOrThunkToEmbed;
-    return TRUE;
 }
 
 void ZapInfo::embedFunctionEntryImport(CORINFO_METHOD_HANDLE ftn,
