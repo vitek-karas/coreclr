@@ -4820,7 +4820,7 @@ Precode* MethodDesc::GetOrCreatePrecode()
         // If the method is zapped, then the only way it may not have a stable entry point yet
         // is that it has a precode. In this case it's not marked as having precode through HasPrecode
         // instead the zapped precode acts as a temporary entry point.
-        pExpected = *pSlot;
+        pExpected = ::VolatileLoadWithoutBarrier(pSlot);
         Module * pZapModule = GetZapModule();
         if ((pZapModule == NULL) || !pZapModule->IsZappedPrecode(pExpected))
         {
@@ -4921,7 +4921,7 @@ BOOL MethodDesc::SetStableEntryPointInterlocked(PCODE addr, PTR_PCODE ppPrevious
     {
         // If the method is zapped, then the only way it may not have a stable entry point yet
         // is that it has a precode.
-        pExpected = *pSlot;
+        pExpected = ::VolatileLoadWithoutBarrier(pSlot);
         Module * pZapModule = GetZapModule();
         if ((pZapModule == NULL) || !pZapModule->IsZappedPrecode(pExpected))
         {
