@@ -1125,7 +1125,7 @@ class ICorCompilePreloader
     // Else, use ICorCompileInfo::CanEmbedXXX()
     //
 
-    virtual DWORD MapMethodEntryPoint(
+    virtual DWORD MapMethodSlot(
             CORINFO_METHOD_HANDLE handle
             ) = 0;
 
@@ -1151,10 +1151,6 @@ class ICorCompilePreloader
 
     virtual DWORD MapModuleIDHandle(
             CORINFO_MODULE_HANDLE handle
-            ) = 0;
-
-    virtual DWORD MapMethodSlot(
-            CORINFO_METHOD_HANDLE handle
             ) = 0;
 
     // Load a method for the specified method def

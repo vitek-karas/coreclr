@@ -4647,14 +4647,12 @@ void CEEPreloader::Preload(CorProfileData * profileData)
 // ICorCompilerPreloader
 //
 
-DWORD CEEPreloader::MapMethodEntryPoint(CORINFO_METHOD_HANDLE handle)
+DWORD CEEPreloader::MapMethodSlot(CORINFO_METHOD_HANDLE handle)
 {
     STANDARD_VM_CONTRACT;
 
     MethodDesc *pMD = GetMethod(handle);
-    Precode * pPrecode = pMD->GetSavedPrecode(m_image);
-
-    return m_image->GetRVA(pPrecode);
+    return m_image->GetRVA((PVOID)pMD->GetAddrOfSlot());
 }
 
 DWORD CEEPreloader::MapClassHandle(CORINFO_CLASS_HANDLE handle)
@@ -4706,14 +4704,6 @@ DWORD CEEPreloader::MapModuleIDHandle(CORINFO_MODULE_HANDLE handle)
     STANDARD_VM_CONTRACT;
 
     return m_image->GetRVA(handle) + (DWORD)Module::GetOffsetOfModuleID();
-}
-
-DWORD CEEPreloader::MapMethodSlot(CORINFO_METHOD_HANDLE handle)
-{
-    STANDARD_VM_CONTRACT;
-
-    MethodDesc *pMD = GetMethod(handle);
-    return m_image->GetRVA((PVOID)pMD->GetAddrOfSlot());
 }
 
 CORINFO_METHOD_HANDLE CEEPreloader::NextUncompiledMethod()
