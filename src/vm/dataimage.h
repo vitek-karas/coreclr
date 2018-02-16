@@ -285,6 +285,12 @@ public:
     void CopyData(ZapStoredStructure * pNode, const void * p, ULONG size);
     void CopyDataToOffset(ZapStoredStructure * pNode, ULONG offset, const void * p, ULONG size);
 
+    ZapNode * GetInnerPtr(ZapNode * pNode, SSIZE_T offset);
+    ZapNode * GetInnerPtr(ZapStoredStructure * pNode, SSIZE_T offset)
+    {
+        return GetInnerPtr((ZapNode *)pNode, offset);
+    }
+
     //
     // In the second phase, data is arranged in the image by successive calls
     // to PlaceMappedRange.  Items are arranged using pointers to data structures in the

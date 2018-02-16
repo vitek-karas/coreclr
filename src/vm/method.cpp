@@ -3684,15 +3684,27 @@ void MethodDesc::SaveChunk::SaveOneChunk(COUNT_T start, COUNT_T count, ULONG siz
         UNREACHABLE();
     }
 
-    ULONG size = sizeOfMethodDescs + sizeof(MethodDescChunk);
-    ZapStoredStructure * pNode = m_pImage->StoreStructure(NULL, size, kind);
+    ULONG size = sizeOfMethodDescs + sizeof(MethodDescChunk) + sizeof(MethodDescChunk::TemporaryEntryPointsSlot);
+    ZapStoredStructure * pStructureNode = m_pImage->StoreStructure(NULL, size, kind);
 
-    BYTE * pData = (BYTE *)m_pImage->GetImagePointer(pNode);
+    BYTE * pData = (BYTE *)m_pImage->GetImagePointer(pStructureNode);
 
-    MethodDescChunk * pNewChunk = (MethodDescChunk *)pData;
-
+    MethodDescChunk::TemporaryEntryPointsSlot * pTemporaryEntryPointsSlot =
+        (MethodDescChunk::TemporaryEntryPointsSlot *)pData;
     // Bind the image space so we can use the regular fixup helpers
+    m_pImage->BindPointer(pTemporaryEntryPointsSlot, pStructureNode, 0);
+
+    MethodDescChunk * pNewChunk = (MethodDescChunk *)(pData + sizeof(MethodDescChunk::TemporaryEntryPointsSlot));
+    // Don't bind the chunk pointer to the structure node since that would mean
+    // it doesn't start at offset 0. Instead create an inner ptr node and bind to that one.
+    // This helps with not spreading the knowledge of the storage of the temporary entry points slot
+    // throughout the codebase (since several pieces need to be able to map into the chunks
+    // during fixups).
+    ZapNode * pNode = m_pImage->GetInnerPtr(pStructureNode, sizeof(MethodDescChunk::TemporaryEntryPointsSlot));
     m_pImage->BindPointer(pNewChunk, pNode, 0);
+
+    // Move the pData to point to the start of the chunk, as it simplifies the code below
+    pData += sizeof(MethodDescChunk::TemporaryEntryPointsSlot);
 
     pNewChunk->SetMethodTable(m_methodInfos[start].m_pMD->GetMethodTable());
 
@@ -3877,7 +3889,7 @@ int __cdecl MethodDesc::SaveChunk::MethodInfoCmp(const void* a_, const void* b_)
 }
 
 //*******************************************************************************
-ZapStoredStructure * MethodDesc::SaveChunk::Save()
+ZapNode * MethodDesc::SaveChunk::Save()
 {
     // Sort by priority as primary key and token as secondary key
     qsort (&m_methodInfos[0],           // start of array

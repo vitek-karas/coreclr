@@ -742,13 +742,13 @@ void ZapImage::ComputeRVAs()
 {
     ZapWriter::ComputeRVAs();
 
+    m_pInnerPtrs->Resolve();
+
     if (!IsReadyToRunCompilation())
     {
         m_pMethodSlots->Resolve();
         m_pWrappers->Resolve();
     }
-
-    m_pInnerPtrs->Resolve();
 
 #ifdef WIN64EXCEPTIONS
     SetRuntimeFunctionsDirectoryEntry();
