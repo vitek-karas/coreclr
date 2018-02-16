@@ -1534,7 +1534,7 @@ public:
     {
         DataImage * m_pImage;
 
-        ZapStoredStructure * m_pFirstNode;
+        ZapNode * m_pFirstNode;
         MethodDescChunk * m_pLastChunk;
 
         typedef enum _MethodPriorityEnum
@@ -1575,7 +1575,7 @@ public:
 
         void Append(MethodDesc * pMD);
 
-        ZapStoredStructure * Save();
+        ZapNode * Save();
     };
 
     bool CanSkipDoPrestub(MethodDesc * callerMD, 
@@ -1973,7 +1973,9 @@ public:
     {
         LIMITED_METHOD_CONTRACT;
         _ASSERTE(HasTemporaryEntryPoints());
-        return *(dac_cast<DPTR(TADDR)>(this) - 1);
+        _ASSERTE(sizeof(TADDR) == sizeof(TemporaryEntryPointsSlot));
+        TADDR pSlot = dac_cast<TADDR>(this) - sizeof(TADDR);
+        return IsZapped() ? TemporaryEntryPointsSlot::GetValueAtPtr(pSlot) : *PTR_TADDR(pSlot);
     }
 
     PCODE GetTemporaryEntryPoint(int index);
@@ -2123,6 +2125,10 @@ public:
         LIMITED_METHOD_DAC_CONTRACT;
         return PTR_MethodDesc(dac_cast<TADDR>(this) + sizeof(MethodDescChunk));
     }
+
+    // The chunk is preceded by a temporary entry point slot.
+    // For zapped chunks the slot is a relative pointer, for non-zapped it's a direct address.
+    typedef RelativePointer<TADDR> TemporaryEntryPointsSlot;
 
     // Maximum size of one chunk (corresponts to the maximum of m_size = 0xFF)
     static const SIZE_T MaxSizeOfMethodDescs = 0x100 * MethodDesc::ALIGNMENT;

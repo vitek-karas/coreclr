@@ -31,6 +31,11 @@ public:
 
     virtual int GetOffset() = 0;
 
+    virtual DWORD GetSize()
+    {
+        return GetBase()->GetSize() - GetOffset();
+    }
+
     void Resolve()
     {
         if (m_pBase->IsPlaced())

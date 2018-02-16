@@ -25,6 +25,7 @@
 #include "../zap/zapwriter.h"
 #include "../zap/zapimage.h"
 #include "../zap/zapimport.h"
+#include "../zap/zapinnerptr.h"
 #include "inlinetracking.h"
 
 #define NodeTypeForItemKind(kind) ((ZapNodeType)(ZapNodeType_StoredStructure + kind))
@@ -287,6 +288,11 @@ void DataImage::CopyDataToOffset(ZapStoredStructure * pNode, ULONG offset, const
     memcpy((void *) target, p, size);
 }
 
+ZapNode * DataImage::GetInnerPtr(ZapNode * pNode, SSIZE_T offset)
+{
+    return m_pZapImage->GetInnerPtr(pNode, offset);
+}
+
 void DataImage::PlaceStructureForAddress(const void * data, CorCompileSection section)
 {
     STANDARD_VM_CONTRACT;
@@ -413,6 +419,17 @@ static SSIZE_T DecodeTargetOffset(PVOID pLocation, ZapRelocationType type)
     }
 }
 
+static void UnwrapInnerPtr(ZapNode ** ppNode, SSIZE_T * pOffset)
+{
+    ZapNode * pNode = *ppNode;
+    if (pNode->GetType() == ZapNodeType_InnerPtr)
+    {
+        ZapInnerPtr * pInnerPtr = (ZapInnerPtr *)pNode;
+        *ppNode = pInnerPtr->GetBase();
+        *pOffset += pInnerPtr->GetOffset();
+    }
+}
+
 void DataImage::FixupField(PVOID p, SSIZE_T offset, PVOID pTarget, SSIZE_T targetOffset, ZapRelocationType type)
 {
     STANDARD_VM_CONTRACT;
@@ -441,14 +458,18 @@ void DataImage::FixupField(PVOID p, SSIZE_T offset, PVOID pTarget, SSIZE_T targe
     targetOffset += pTargetEntry->offset;
     _ASSERTE(0 <= targetOffset && (DWORD)targetOffset <= pTargetEntry->pNode->GetSize());
 
+    SSIZE_T finalOffset = offset;
+    ZapNode * pNode = pEntry->pNode;
+    UnwrapInnerPtr(&pNode, &finalOffset);
+
     FixupEntry entry;
     entry.m_type = type;
-    entry.m_offset = (DWORD)offset;
-    entry.m_pLocation = AsStoredStructure(pEntry->pNode);
+    entry.m_offset = (DWORD)finalOffset;
+    entry.m_pLocation = AsStoredStructure(pNode);
     entry.m_pTargetNode = pTargetEntry->pNode;
     AppendFixup(entry);
 
-    EncodeTargetOffset((BYTE *)AsStoredStructure(pEntry->pNode)->GetData() + offset, targetOffset, type);
+    EncodeTargetOffset((BYTE *)AsStoredStructure(pNode)->GetData() + finalOffset, targetOffset, type);
 }
 
 void DataImage::FixupFieldToNode(PVOID p, SSIZE_T offset, ZapNode * pTarget, SSIZE_T targetOffset, ZapRelocationType type)
@@ -470,14 +491,18 @@ void DataImage::FixupFieldToNode(PVOID p, SSIZE_T offset, ZapNode * pTarget, SSI
 
     _ASSERTE(pTarget != NULL);
 
+    SSIZE_T finalOffset = offset;
+    ZapNode * pNode = pEntry->pNode;
+    UnwrapInnerPtr(&pNode, &finalOffset);
+
     FixupEntry entry;
     entry.m_type = type;
-    entry.m_offset = (DWORD)offset;
-    entry.m_pLocation = AsStoredStructure(pEntry->pNode);
+    entry.m_offset = (DWORD)finalOffset;
+    entry.m_pLocation = AsStoredStructure(pNode);
     entry.m_pTargetNode = pTarget;
     AppendFixup(entry);
 
-    EncodeTargetOffset((BYTE *)AsStoredStructure(pEntry->pNode)->GetData() + offset, targetOffset, type);
+    EncodeTargetOffset((BYTE *)AsStoredStructure(pNode)->GetData() + finalOffset, targetOffset, type);
 }
 
 DWORD DataImage::GetRVA(const void *data)
@@ -487,7 +512,17 @@ DWORD DataImage::GetRVA(const void *data)
     const StructureEntry * pEntry = m_structures.LookupPtr(data);
     _ASSERTE(pEntry != NULL);
 
-    return pEntry->pNode->GetRVA() + (DWORD)pEntry->offset;
+    ZapNode * pNode = pEntry->pNode;
+    SSIZE_T offset = pEntry->offset;
+
+    // Solve a problem with ordering of ComputeRVA.
+    // If there's a normal node which needs innerptr node's RVA it will likely fail
+    // since the innerptrs are resolved last.
+    // On the other hand, if the base of the innerptr is already resolved, then the innerptr's
+    // RVA can always be computed.
+    UnwrapInnerPtr(&pNode, &offset);
+
+    return pNode->GetRVA() + (DWORD)offset;
 }
 
 void DataImage::ZeroField(PVOID p, SSIZE_T offset, SIZE_T size)
@@ -517,7 +552,11 @@ void * DataImage::GetImagePointer(PVOID p, SSIZE_T offset)
     offset += pEntry->offset;
     _ASSERTE(0 <= offset && (DWORD)offset < pEntry->pNode->GetSize());
 
-    return (BYTE *)AsStoredStructure(pEntry->pNode)->GetData() + offset;
+    SSIZE_T finalOffset = offset;
+    ZapNode * pNode = pEntry->pNode;
+    UnwrapInnerPtr(&pNode, &finalOffset);
+
+    return (BYTE *)AsStoredStructure(pNode)->GetData() + finalOffset;
 }
 
 ZapNode * DataImage::GetNodeForStructure(PVOID p, SSIZE_T * pOffset)
