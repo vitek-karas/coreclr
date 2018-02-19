@@ -3339,6 +3339,8 @@ MethodDesc::Fixup(
         {
             image->FixupRelativePointerField(pNewChunk, offsetof(MethodDescChunk, m_next));
         }
+
+        image->FixupRelativePointerField(PVOID((TADDR)pNewChunk - sizeof(MethodDescChunk::TemporaryEntryPointsSlot)), 0);
     }
 
     if (pNewMD->HasPrecode())
@@ -3612,7 +3614,6 @@ void MethodDesc::FixupSlot(DataImage *image, PVOID p, SSIZE_T offset, ZapRelocat
 {
     STANDARD_VM_CONTRACT;
 
-
     Precode* pPrecode = GetSavedPrecodeOrNull(image);
     if (pPrecode != NULL)
     {
@@ -3739,7 +3740,7 @@ void MethodDesc::SaveChunk::SaveOneChunk(COUNT_T start, COUNT_T count, ULONG siz
 
         if (pMethodInfo->m_fHasPrecode)
         {
-            precodeSaveChunk.Save(m_pImage, pMD);
+            precodeSaveChunk.AddPrecodeForMethod(pMD);
 
             // Zapped precodes can't be patched (they are read/execute only) and so we can't use them
             // as stable entry points (since we would go through PreStub all the time).
@@ -3783,7 +3784,8 @@ void MethodDesc::SaveChunk::SaveOneChunk(COUNT_T start, COUNT_T count, ULONG siz
     }
     _ASSERTE(offset == sizeOfMethodDescs + sizeof(MethodDescChunk));
 
-    precodeSaveChunk.Flush(m_pImage);
+    PVOID pTemporaryEntryPoints = precodeSaveChunk.Save(m_pImage);
+    pTemporaryEntryPointsSlot->SetValueMaybeNull(TADDR(pTemporaryEntryPoints));
 
     if (m_methodInfos[start].m_pMD->IsTightlyBoundToMethodTable())
     {

@@ -339,14 +339,16 @@ public:
     // Helper class for saving precodes in chunks
     class SaveChunk
     {
-#ifdef HAS_FIXUP_PRECODE_CHUNKS
         // Array of methods to be saved in the method desc chunk
         InlineSArray<MethodDesc *, 20> m_rgPendingChunk;
-#endif // HAS_FIXUP_PRECODE_CHUNKS
 
     public:
-        void Save(DataImage * image, MethodDesc * pMD);
-        void Flush(DataImage * image);
+        // Add method desc to the list of MDs to save in the chunk
+        void AddPrecodeForMethod(MethodDesc * pMD);
+
+        // Save the entire chunk. The method returns pointer to the saved chunk.
+        // This pointer is registered in the image and can be used with Fixup infra.
+        PVOID Save(DataImage * image);
     };
 #endif // FEATURE_PREJIT
 

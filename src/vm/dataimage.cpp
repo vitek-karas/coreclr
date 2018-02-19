@@ -1416,6 +1416,102 @@ public:
 };
 #endif // HAS_REMOTING_PRECODE
 
+class ZapStubPrecodeChunk : public ZapNode
+{
+protected:
+    MethodDesc ** m_ppMD;
+    COUNT_T m_count;
+    SSIZE_T m_sizeOfOne;
+    DataImage::ItemKind m_kind;
+
+public:
+    ZapStubPrecodeChunk(MethodDesc ** ppMethod, COUNT_T count, SSIZE_T sizeOfOne, DataImage::ItemKind kind)
+        : m_ppMD(ppMethod), m_count(count), m_sizeOfOne(sizeOfOne), m_kind(kind)
+    {
+    }
+
+    virtual DWORD GetSize()
+    {
+        return m_count * m_sizeOfOne;
+    }
+
+    virtual UINT GetAlignment()
+    {
+        return PRECODE_ALIGNMENT;
+    }
+
+    virtual ZapNodeType GetType()
+    {
+        return NodeTypeForItemKind(m_kind);
+    }
+
+    virtual DWORD ComputeRVA(ZapWriter * pZapWriter, DWORD dwPos)
+    {
+        dwPos = AlignUp(dwPos, GetAlignment());
+
+        BOOL foundStraddler = FALSE;
+        for (COUNT_T i = 0; i < m_count; i++)
+        {
+            // Alignment for straddlers. Need a cast to help gcc choose between AlignmentTrim(UINT,UINT) and (UINT64,UINT).
+            if (AlignmentTrim(static_cast<UINT>(dwPos + (m_sizeOfOne * i) + offsetof(StubPrecode, m_pMethodDesc)), RELOCATION_PAGE_SIZE) > RELOCATION_PAGE_SIZE - sizeof(TADDR))
+                foundStraddler = TRUE;
+        }
+
+        // We have to keep all the precodes saved in one chunk (since they are used as temporary entry points
+        // and looked up based on index), so if we found straddlers, move the entire chunk to start on a page boundary.
+        dwPos = AlignUp(static_cast<UINT>(dwPos), RELOCATION_PAGE_SIZE);
+
+        SetRVA(dwPos);
+
+        dwPos += GetSize();
+
+        return dwPos;
+    }
+
+    virtual void Save(ZapWriter * pZapWriter)
+    {
+        ZapImage * pImage = ZapImage::GetImage(pZapWriter);
+        SSIZE_T size = m_count * m_sizeOfOne;
+        TADDR pBase = (TADDR)new (pImage->GetHeap()) BYTE[size];
+
+        for (COUNT_T i = 0; i < m_count; i++)
+        {
+            StubPrecode * pPrecode = (StubPrecode *)(pBase + (m_sizeOfOne * i));
+            pPrecode->Init(m_ppMD[i]);
+
+            _ASSERTE((Precode *)pPrecode == Precode::GetPrecodeForTemporaryEntryPoint(pBase, i));
+
+            SSIZE_T offset;
+            ZapNode * pNode = pImage->m_pDataImage->GetNodeForStructure(m_ppMD[i], &offset);
+            pImage->WriteReloc(pPrecode, offsetof(StubPrecode, m_pMethodDesc),
+                pNode, (int)offset, IMAGE_REL_BASED_PTR);
+
+            pImage->WriteReloc(pPrecode, offsetof(StubPrecode, m_rel32),
+                pImage->GetHelperThunk(CORINFO_HELP_EE_PRESTUB), 0, IMAGE_REL_BASED_REL32);
+        }
+
+        pZapWriter->Write(PVOID(pBase), size);
+    }
+};
+
+void DataImage::SaveStubPrecodeChunk(TADDR ptr, SSIZE_T sizeOfOne, MethodDesc ** ppMD, COUNT_T count, ItemKind kind)
+{
+    MethodDesc ** ppMDCopy = (MethodDesc **) new (GetHeap()) BYTE[sizeof(MethodDesc *) * count];
+    ZapStubPrecodeChunk * pNode = new (GetHeap()) ZapStubPrecodeChunk(ppMDCopy, count, sizeOfOne, kind);
+
+    SSIZE_T offset = 0;
+    for (COUNT_T i = 0; i < count; i++)
+    {
+        ppMDCopy[i] = ppMD[i];
+        BindPointer(PVOID(ptr + offset), pNode, offset);
+        offset += sizeOfOne;
+    }
+
+    GetHelperThunk(CORINFO_HELP_EE_PRESTUB);
+
+    AddStructureInOrder(pNode);
+}
+
 void DataImage::SavePrecode(PVOID ptr, MethodDesc * pMD, PrecodeType t, ItemKind kind, BOOL fIsPrebound)
 {
     ZapNode * pNode = NULL;

@@ -796,31 +796,15 @@ BOOL Precode::IsPrebound(DataImage *image)
 #endif
 }
 
-void Precode::SaveChunk::Save(DataImage* image, MethodDesc * pMD)
+void Precode::SaveChunk::AddPrecodeForMethod(MethodDesc * pMD)
 {
     STANDARD_VM_CONTRACT;
 
-    PrecodeType precodeType = pMD->GetPrecodeType();
-
-#ifdef HAS_FIXUP_PRECODE_CHUNKS
-    if (precodeType == PRECODE_FIXUP)
-    {
-        m_rgPendingChunk.Append(pMD);
-        return;
-    }
-#endif // HAS_FIXUP_PRECODE_CHUNKS
-
-    SIZE_T size = Precode::SizeOf(precodeType);
-    Precode* pPrecode = (Precode *)new (image->GetHeap()) BYTE[size];
-    pPrecode->Init(precodeType, pMD, NULL);
-    pPrecode->Save(image);
-
-    // Alias the temporary entrypoint
-    image->RegisterSurrogate(pMD, pPrecode);
+    m_rgPendingChunk.Append(pMD);
 }
 
 #ifdef HAS_FIXUP_PRECODE_CHUNKS
-static void SaveFixupPrecodeChunk(DataImage * image, MethodDesc ** rgMD, COUNT_T count, DataImage::ItemKind kind)
+static PVOID SaveFixupPrecodeChunk(DataImage * image, MethodDesc ** rgMD, COUNT_T count, DataImage::ItemKind kind)
 {
     STANDARD_VM_CONTRACT;
 
@@ -836,6 +820,7 @@ static void SaveFixupPrecodeChunk(DataImage * image, MethodDesc ** rgMD, COUNT_T
         FixupPrecode * pPrecode = pBase + i;
 
         pPrecode->InitForSave((count - 1) - i);
+        _ASSERTE((Precode *)pPrecode == Precode::GetPrecodeForTemporaryEntryPoint((TADDR)pBase, i));
 
         image->BindPointer(pPrecode, pNode, i * sizeof(FixupPrecode));
 
@@ -844,67 +829,69 @@ static void SaveFixupPrecodeChunk(DataImage * image, MethodDesc ** rgMD, COUNT_T
     }
 
     image->CopyData(pNode, pBase, size);
+
+    return pBase;
 }
 #endif // HAS_FIXUP_PRECODE_CHUNKS
 
-void Precode::SaveChunk::Flush(DataImage * image)
+static PVOID SaveStubPrecodeChunk(DataImage * image, MethodDesc ** rgMD, COUNT_T count, DataImage::ItemKind kind)
+{
+    ULONG sizeOfOne = Precode::SizeOfTemporaryEntryPoint(PRECODE_STUB);
+    ULONG size = sizeOfOne * count;
+    TADDR pBase = (TADDR)new (image->GetHeap()) BYTE[size];
+
+    for (COUNT_T i = 0; i < count; i++)
+    {
+        MethodDesc * pMD = rgMD[i];
+        StubPrecode * pPrecode = (StubPrecode *)(pBase + (sizeOfOne * i));
+
+        pPrecode->Init(pMD, NULL);
+        _ASSERTE((Precode *)pPrecode == Precode::GetPrecodeForTemporaryEntryPoint(pBase, i));
+
+        // Alias the temporary entrypoint
+        image->RegisterSurrogate(pMD, pPrecode);
+    }
+
+#if defined(_TARGET_X86_) || defined(_TARGET_AMD64_)
+    image->SaveStubPrecodeChunk(pBase, sizeOfOne, rgMD, count, kind);
+#else
+    ZapStoredStructure * pNode = image->StoreStructure(NULL, size, kind, PRECODE_ALIGNMENT);
+    for (COUNT_T i = 0; i < count; i++)
+    {
+        image->BindPointer((void *)(pBase + (sizeOfOne * i)), pNode, sizeOfOne * i);
+    }
+
+    image->CopyData(pNode, (void *)pBase, size);
+#endif // defined(_TARGET_X86_) || defined(_TARGET_AMD64_)
+
+    return (PVOID)pBase;
+}
+
+PVOID Precode::SaveChunk::Save(DataImage * image)
 {
     STANDARD_VM_CONTRACT;
 
-#ifdef HAS_FIXUP_PRECODE_CHUNKS
+    // TODO: Since we have to save precodes in chunks defined by the MethodDescChunk
+    // and not by us here, the hot/cold splitting of precodes is not possible anymore
+    // Review the changes here and decide how to handle this - maybe we could apply the
+    // precode hot/cold split to method desc chunk ordering, or we will have to completely ignore it.
+    // For now we will save everything as cold - but that should probably change
+    // we should possibly apply the same hot/cold split as for methods themselves.
     if (m_rgPendingChunk.GetCount() == 0)
-        return;
+        return NULL;
 
-    // Sort MethodDescs using the item kind for hot-cold spliting
-    struct SortMethodDesc : CQuickSort< MethodDesc * >
-    {
-        DataImage * m_image;
-
-        SortMethodDesc(DataImage *image, MethodDesc **pBase, SSIZE_T iCount)
-            : CQuickSort< MethodDesc * >(pBase, iCount),
-            m_image(image)
-        {
-        }
-
-        int Compare(MethodDesc ** ppMD1, MethodDesc ** ppMD2)
-        {
-            MethodDesc * pMD1 = *ppMD1;
-            MethodDesc * pMD2 = *ppMD2;
-
-            // Compare item kind
-            DataImage::ItemKind kind1 = GetPrecodeItemKind(m_image, pMD1);
-            DataImage::ItemKind kind2 = GetPrecodeItemKind(m_image, pMD2);
-
-            return kind1 - kind2;
-        }
-    };
-
-    SortMethodDesc sort(image, &(m_rgPendingChunk[0]), m_rgPendingChunk.GetCount());
-    sort.Sort();
-
-    DataImage::ItemKind pendingKind = DataImage::ITEM_METHOD_PRECODE_COLD_WRITEABLE;
-    COUNT_T pendingCount = 0;
-
-    COUNT_T i;
-    for (i = 0; i < m_rgPendingChunk.GetCount(); i++)
-    {
-        MethodDesc * pMD = m_rgPendingChunk[i];
-
-        DataImage::ItemKind kind = GetPrecodeItemKind(image, pMD);
-        if (kind != pendingKind)
-        {
-            if (pendingCount != 0)
-                SaveFixupPrecodeChunk(image, &(m_rgPendingChunk[i-pendingCount]), pendingCount, pendingKind);
-
-            pendingKind = kind;
-            pendingCount = 0;
-        }
-
-        pendingCount++;
-    }
-
-    // Flush the remaining items
-    SaveFixupPrecodeChunk(image, &(m_rgPendingChunk[i-pendingCount]), pendingCount, pendingKind);
+    // The type of the precode used is simple.
+    // If we can, we will use Fixup precodes as those are more space efficient.
+    // If not we fallback to Stub precodes. We use the same precode type for all precodes in one chunk.
+    // There's no need to use precode which would be most suitable for the given method
+    // as the precodes saved here act as temporary entry points which will never be patched.
+    // Nobody should use the precode as a stable/multi-callable entry point for the method.
+    // We need the precode as the most simple way to get to the DoPrestub which will figure out
+    // what the method needs and potentially create a runtime allocated (patchable) precode of the right type.
+#ifdef HAS_FIXUP_PRECODE_CHUNKS
+    return SaveFixupPrecodeChunk(image, &m_rgPendingChunk[0], m_rgPendingChunk.GetCount(), DataImage::ItemKind::ITEM_METHOD_PRECODE_COLD);
+#else
+    return SaveStubPrecodeChunk(image, &m_rgPendingChunk[0], m_rgPendingChunk.GetCount(), DataImage::ItemKind::ITEM_METHOD_PRECODE_COLD);
 #endif // HAS_FIXUP_PRECODE_CHUNKS
 }
 
