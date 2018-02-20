@@ -1966,15 +1966,20 @@ public:
     BOOL HasTemporaryEntryPoints()
     {
         LIMITED_METHOD_CONTRACT;
-        return !IsZapped();
+        return GetTemporaryEntryPoints() != NULL;
+    }
+
+    TADDR GetTemporaryEntryPointsSlot()
+    {
+        LIMITED_METHOD_CONTRACT;
+        _ASSERTE(sizeof(TADDR) == sizeof(TemporaryEntryPointsSlot));
+        return dac_cast<TADDR>(this) - sizeof(TADDR);
     }
 
     TADDR GetTemporaryEntryPoints()
     {
         LIMITED_METHOD_CONTRACT;
-        _ASSERTE(HasTemporaryEntryPoints());
-        _ASSERTE(sizeof(TADDR) == sizeof(TemporaryEntryPointsSlot));
-        TADDR pSlot = dac_cast<TADDR>(this) - sizeof(TADDR);
+        TADDR pSlot = GetTemporaryEntryPointsSlot();
         return IsZapped() ? TemporaryEntryPointsSlot::GetValueAtPtr(pSlot) : *PTR_TADDR(pSlot);
     }
 

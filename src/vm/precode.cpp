@@ -796,15 +796,21 @@ BOOL Precode::IsPrebound(DataImage *image)
 #endif
 }
 
-void Precode::SaveChunk::AddPrecodeForMethod(MethodDesc * pMD)
+void Precode::SaveChunk::AddPrecodeForMethod(MethodDesc * pMD, BOOL registerSurrogate)
 {
     STANDARD_VM_CONTRACT;
 
-    m_rgPendingChunk.Append(pMD);
+    m_rgMethods.Append(pMD);
+    m_rgRegisterSurrogateFlags.Append(registerSurrogate);
 }
 
 #ifdef HAS_FIXUP_PRECODE_CHUNKS
-static PVOID SaveFixupPrecodeChunk(DataImage * image, MethodDesc ** rgMD, COUNT_T count, DataImage::ItemKind kind)
+static PVOID SaveFixupPrecodeChunk(
+    DataImage * image,
+    MethodDesc ** rgMD,
+    BOOL * rgRegisterSurrogate,
+    COUNT_T count,
+    DataImage::ItemKind kind)
 {
     STANDARD_VM_CONTRACT;
 
@@ -824,8 +830,12 @@ static PVOID SaveFixupPrecodeChunk(DataImage * image, MethodDesc ** rgMD, COUNT_
 
         image->BindPointer(pPrecode, pNode, i * sizeof(FixupPrecode));
 
-        // Alias the temporary entrypoint
-        image->RegisterSurrogate(pMD, pPrecode);
+        // Alias the temporary entrypoint to the "new" MD - the one saved in the image.
+        image->RegisterSurrogate((MethodDesc *)image->GetImagePointer(pMD), pPrecode);
+
+        // If asked for, register alias the precode to the "old" MD (the one created from metadata) as well.
+        if (rgRegisterSurrogate[i])
+            image->RegisterSurrogate(pMD, pPrecode);
     }
 
     image->CopyData(pNode, pBase, size);
@@ -834,8 +844,15 @@ static PVOID SaveFixupPrecodeChunk(DataImage * image, MethodDesc ** rgMD, COUNT_
 }
 #endif // HAS_FIXUP_PRECODE_CHUNKS
 
-static PVOID SaveStubPrecodeChunk(DataImage * image, MethodDesc ** rgMD, COUNT_T count, DataImage::ItemKind kind)
+static PVOID SaveStubPrecodeChunk(
+    DataImage * image,
+    MethodDesc ** rgMD,
+    BOOL * rgRegisterSurrogate,
+    COUNT_T count,
+    DataImage::ItemKind kind)
 {
+    STANDARD_VM_CONTRACT;
+
     ULONG sizeOfOne = Precode::SizeOfTemporaryEntryPoint(PRECODE_STUB);
     ULONG size = sizeOfOne * count;
     TADDR pBase = (TADDR)new (image->GetHeap()) BYTE[size];
@@ -848,8 +865,12 @@ static PVOID SaveStubPrecodeChunk(DataImage * image, MethodDesc ** rgMD, COUNT_T
         pPrecode->Init(pMD, NULL);
         _ASSERTE((Precode *)pPrecode == Precode::GetPrecodeForTemporaryEntryPoint(pBase, i));
 
-        // Alias the temporary entrypoint
-        image->RegisterSurrogate(pMD, pPrecode);
+        // Alias the temporary entrypoint to the "new" MD - the one saved in the image.
+        image->RegisterSurrogate((MethodDesc *)image->GetImagePointer(pMD), pPrecode);
+
+        // If asked for, register alias the precode to the "old" MD (the one created from metadata) as well.
+        if (rgRegisterSurrogate[i])
+            image->RegisterSurrogate(pMD, pPrecode);
     }
 
 #if defined(_TARGET_X86_) || defined(_TARGET_AMD64_)
@@ -877,7 +898,7 @@ PVOID Precode::SaveChunk::Save(DataImage * image)
     // precode hot/cold split to method desc chunk ordering, or we will have to completely ignore it.
     // For now we will save everything as cold - but that should probably change
     // we should possibly apply the same hot/cold split as for methods themselves.
-    if (m_rgPendingChunk.GetCount() == 0)
+    if (m_rgMethods.GetCount() == 0)
         return NULL;
 
     // The type of the precode used is simple.
@@ -889,9 +910,19 @@ PVOID Precode::SaveChunk::Save(DataImage * image)
     // We need the precode as the most simple way to get to the DoPrestub which will figure out
     // what the method needs and potentially create a runtime allocated (patchable) precode of the right type.
 #ifdef HAS_FIXUP_PRECODE_CHUNKS
-    return SaveFixupPrecodeChunk(image, &m_rgPendingChunk[0], m_rgPendingChunk.GetCount(), DataImage::ItemKind::ITEM_METHOD_PRECODE_COLD);
+    return SaveFixupPrecodeChunk(
+        image,
+        &m_rgMethods[0],
+        &m_rgRegisterSurrogateFlags[0],
+        m_rgMethods.GetCount(),
+        DataImage::ItemKind::ITEM_METHOD_PRECODE_COLD);
 #else
-    return SaveStubPrecodeChunk(image, &m_rgPendingChunk[0], m_rgPendingChunk.GetCount(), DataImage::ItemKind::ITEM_METHOD_PRECODE_COLD);
+    return SaveStubPrecodeChunk(
+        image,
+        &m_rgMethods[0],
+        &m_rgRegisterSurrogateFlags[0],
+        m_rgMethods.GetCount(),
+        DataImage::ItemKind::ITEM_METHOD_PRECODE_COLD);
 #endif // HAS_FIXUP_PRECODE_CHUNKS
 }
 

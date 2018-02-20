@@ -340,11 +340,13 @@ public:
     class SaveChunk
     {
         // Array of methods to be saved in the method desc chunk
-        InlineSArray<MethodDesc *, 20> m_rgPendingChunk;
+        InlineSArray<MethodDesc *, 20> m_rgMethods;
+        // Array of bools for methods for which we should register the precode as a surrogate
+        InlineSArray<BOOL, 20> m_rgRegisterSurrogateFlags;
 
     public:
         // Add method desc to the list of MDs to save in the chunk
-        void AddPrecodeForMethod(MethodDesc * pMD);
+        void AddPrecodeForMethod(MethodDesc * pMD, BOOL registerSurrogate);
 
         // Save the entire chunk. The method returns pointer to the saved chunk.
         // This pointer is registered in the image and can be used with Fixup infra.
