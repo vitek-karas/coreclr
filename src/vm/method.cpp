@@ -2702,7 +2702,7 @@ void MethodDesc::Save(DataImage *image)
         {
             // import thunk is only needed if the P/Invoke is inlinable
 #if defined(_TARGET_X86_) || defined(_TARGET_AMD64_)  
-            image->SavePrecode(pNMD->GetNDirectImportThunkGlue(), pNMD, PRECODE_NDIRECT_IMPORT, DataImage::ITEM_METHOD_PRECODE_COLD);
+            image->SaveNDirectPrecode(pNMD->GetNDirectImportThunkGlue(), pNMD, DataImage::ITEM_METHOD_PRECODE_COLD);
 #else
             image->StoreStructure(pNMD->GetNDirectImportThunkGlue(), sizeof(NDirectImportThunkGlue), DataImage::ITEM_METHOD_PRECODE_COLD);
 #endif

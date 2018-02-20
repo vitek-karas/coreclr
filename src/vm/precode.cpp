@@ -700,36 +700,6 @@ static DataImage::ItemKind GetPrecodeItemKind(DataImage * image, MethodDesc * pM
     return kind;
 }
 
-void Precode::Save(DataImage *image)
-{
-    STANDARD_VM_CONTRACT;
-
-    MethodDesc * pMD = GetMethodDesc();
-    PrecodeType t = GetType();
-
-#ifdef HAS_FIXUP_PRECODE_CHUNKS
-    _ASSERTE(GetType() != PRECODE_FIXUP);
-#endif
-
-#if defined(_TARGET_X86_) || defined(_TARGET_AMD64_)
-    // StubPrecode and RemotingPrecode may have straddlers (relocations crossing pages) on x86 and x64. We need 
-    // to insert padding to eliminate it. To do that, we need to save these using custom ZapNode that can only
-    // be implemented in dataimage.cpp or zapper due to factoring of the header files.
-    BOOL fIsPrebound = IsPrebound(image);
-    image->SavePrecode(this, 
-        pMD, 
-        t,  
-        GetPrecodeItemKind(image, pMD, fIsPrebound),
-        fIsPrebound);
-#else
-    _ASSERTE(FitsIn<ULONG>(SizeOf(t)));
-    image->StoreStructure((void*)GetStart(), 
-        static_cast<ULONG>(SizeOf(t)), 
-        GetPrecodeItemKind(image, pMD, IsPrebound(image)),
-        AlignOf(t));
-#endif // _TARGET_X86_ || _TARGET_AMD64_
-}
-
 void Precode::Fixup(DataImage *image, MethodDesc * pMD)
 {
     STANDARD_VM_CONTRACT;
