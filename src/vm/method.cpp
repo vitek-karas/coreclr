@@ -3340,16 +3340,19 @@ MethodDesc::Fixup(
             image->FixupRelativePointerField(pNewChunk, offsetof(MethodDescChunk, m_next));
         }
 
-        image->FixupRelativePointerField(PVOID((TADDR)pNewChunk - sizeof(MethodDescChunk::TemporaryEntryPointsSlot)), 0);
+        image->FixupRelativePointerField(PVOID(pNewChunk->GetTemporaryEntryPointsSlot()), 0);
+    }
+
+    // Temporary entry points are registered as surrogates of the "new" MDs.
+    // The "old" MDs only have surrogates registered if they need to use them as precodes.
+    Precode * pTemporaryEntryPoint = (Precode *)image->LookupSurrogate(pNewMD);
+    if (pTemporaryEntryPoint != NULL)
+    {
+        pTemporaryEntryPoint->Fixup(image, this);
     }
 
     if (pNewMD->HasPrecode())
     {
-        Precode* pPrecode = GetSavedPrecode(image);
-
-        // Fixup the precode if we have stored it
-        pPrecode->Fixup(image, this);
-
         // Clear the HasPrecode flag on the saved MD. Saved precodes can't be used as stable entry points
         // because they can't be directly patched (RX only), so we treat them as temporary entry points instead.
         _ASSERTE(!pNewMD->HasStableEntryPoint());
@@ -3716,11 +3719,31 @@ void MethodDesc::SaveChunk::SaveOneChunk(COUNT_T start, COUNT_T count, ULONG siz
 
     Precode::SaveChunk precodeSaveChunk; // Helper for saving precodes in chunks
 
+    // Determine if this chunk will have temporary entry points (precodes) or not
+    // Need to know up front since it's all or nothing - either all methods get the precode
+    // or none will.
+    BOOL hasTemporaryEntryPoints = FALSE;
+    for (COUNT_T i = 0; i < count; i++)
+    {
+        MethodInfo * pMethodInfo = &(m_methodInfos[start + i]);
+        if (pMethodInfo->m_fHasPrecode)
+            hasTemporaryEntryPoints = TRUE;
+    }
+
     ULONG offset = sizeof(MethodDescChunk);
     for (COUNT_T i = 0; i < count; i++)
     {
         MethodInfo * pMethodInfo = &(m_methodInfos[start + i]);
         MethodDesc * pMD = pMethodInfo->m_pMD;
+
+#ifdef DEBUG
+        if (pMD->IsUnboxingStub() && pMD->IsTightlyBoundToMethodTable())
+        {
+            // Wrapped method desc has to immediately follow unboxing stub, and both have to be in one chunk
+            _ASSERTE(i + 1 < count);
+            _ASSERTE(m_methodInfos[start + i + 1].m_pMD->GetMemberDef() == m_methodInfos[start + i].m_pMD->GetMemberDef());
+        }
+#endif
 
         m_pImage->BindPointer(pMD, pNode, offset);
 
@@ -3738,9 +3761,14 @@ void MethodDesc::SaveChunk::SaveOneChunk(COUNT_T start, COUNT_T count, ULONG siz
         pNewMD->m_chunkIndex = (BYTE) ((offset - sizeof(MethodDescChunk)) / MethodDesc::ALIGNMENT);
         _ASSERTE(pNewMD->GetMethodDescChunk() == pNewChunk);
 
+        if (hasTemporaryEntryPoints)
+        {
+            precodeSaveChunk.AddPrecodeForMethod(pMD, pMethodInfo->m_fHasPrecode);
+        }
+
         if (pMethodInfo->m_fHasPrecode)
         {
-            precodeSaveChunk.AddPrecodeForMethod(pMD);
+            _ASSERTE(hasTemporaryEntryPoints);
 
             // Zapped precodes can't be patched (they are read/execute only) and so we can't use them
             // as stable entry points (since we would go through PreStub all the time).
@@ -3785,6 +3813,8 @@ void MethodDesc::SaveChunk::SaveOneChunk(COUNT_T start, COUNT_T count, ULONG siz
     _ASSERTE(offset == sizeOfMethodDescs + sizeof(MethodDescChunk));
 
     PVOID pTemporaryEntryPoints = precodeSaveChunk.Save(m_pImage);
+    _ASSERTE((hasTemporaryEntryPoints && pTemporaryEntryPoints != NULL) ||
+        (!hasTemporaryEntryPoints && pTemporaryEntryPoints == NULL));
     pTemporaryEntryPointsSlot->SetValueMaybeNull(TADDR(pTemporaryEntryPoints));
 
     if (m_methodInfos[start].m_pMD->IsTightlyBoundToMethodTable())
@@ -3887,7 +3917,11 @@ int __cdecl MethodDesc::SaveChunk::MethodInfoCmp(const void* a_, const void* b_)
 
     // Place unboxing stubs first, code:MethodDesc::FindOrCreateAssociatedMethodDesc depends on this invariant
     int unboxingDiff = (int)(b->m_pMD->IsUnboxingStub() - a->m_pMD->IsUnboxingStub());
-    return unboxingDiff;
+    if (unboxingDiff != 0)
+        return unboxingDiff;
+
+    int hasPrecodeDiff = (a->m_fHasPrecode ? 1 : 0) - (b->m_fHasPrecode ? 1 : 0);
+    return hasPrecodeDiff;
 }
 
 //*******************************************************************************
@@ -3903,6 +3937,8 @@ ZapNode * MethodDesc::SaveChunk::Save()
     int currentTokenRange = -1;
     int nextStart = 0;
     SIZE_T sizeOfMethodDescs = 0;
+    BOOL currentHasPrecode = FALSE;
+    BOOL previousIsUnboxingStub = FALSE;
 
     //
     // Go over all MethodDescs and create smallest number of chunks possible
@@ -3915,23 +3951,39 @@ ZapNode * MethodDesc::SaveChunk::Save()
 
         DWORD priority = pMethodInfo->m_priority;
         int tokenRange = GetTokenRange(pMD->GetMemberDef());
+        BOOL hasPrecode = pMethodInfo->m_fHasPrecode;
 
         SIZE_T size = GetSavedMethodDescSize(pMethodInfo);
 
         // Bundle that has to be in same chunk
         SIZE_T bundleSize = size;
 
+        if (previousIsUnboxingStub)
+        {
+            // We need to keep the unboxing stub and the wrapped method descs in the same chunk.
+            // Since they both have the same priority and token range, the only chunk split
+            // might be caused by the hasPrecode. So if this is the wrapper method desc
+            // just "ignore" it's hasPrecode for the purposes of chunk splitting.
+            // In the worst possible case this may force the entire chunk to get precodes
+            // but that doesn't hurt anything other than size.
+            previousIsUnboxingStub = FALSE;
+            hasPrecode = currentHasPrecode;
+        }
+
         if (pMD->IsUnboxingStub() && pMD->IsTightlyBoundToMethodTable())
         {
-            // Wrapped method desc has to immediately follow unboxing stub, and both has to be in one chunk
+            // Wrapped method desc has to immediately follow unboxing stub, and both have to be in one chunk
             _ASSERTE(m_methodInfos[i+1].m_pMD->GetMemberDef() == m_methodInfos[i].m_pMD->GetMemberDef());
 
             // Make sure that both wrapped method desc and unboxing stub will fit into same chunk
             bundleSize += GetSavedMethodDescSize(&m_methodInfos[i+1]);
+
+            previousIsUnboxingStub = TRUE;
         }
 
         if (priority != currentPriority || 
             tokenRange != currentTokenRange ||
+            hasPrecode != currentHasPrecode ||
             sizeOfMethodDescs + bundleSize > MethodDescChunk::MaxSizeOfMethodDescs)
         {
             if (sizeOfMethodDescs != 0)
@@ -3942,6 +3994,7 @@ ZapNode * MethodDesc::SaveChunk::Save()
 
             currentPriority = priority;
             currentTokenRange = tokenRange;
+            currentHasPrecode = hasPrecode;
             sizeOfMethodDescs = 0;
         }
 
