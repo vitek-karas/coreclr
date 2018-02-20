@@ -470,7 +470,9 @@ public:
     ZapNode * GetGenericSignature(PVOID signature, BOOL fMethod);
 
     void SaveStubPrecodeChunk(TADDR ptr, SSIZE_T sizeOfOne, MethodDesc ** ppMD, COUNT_T count, ItemKind kind);
-    void SavePrecode(PVOID ptr, MethodDesc * pMD, PrecodeType t, ItemKind kind, BOOL fIsPrebound = FALSE);
+#ifdef HAS_NDIRECT_IMPORT_PRECODE
+    void SaveNDirectPrecode(PVOID ptr, MethodDesc * pMD, ItemKind kind);
+#endif // HAS_NDIRECT_IMPORT_PRECODE
 
     void StoreCompressedLayoutMap(LookupMapBase *pMap, ItemKind kind);
 

@@ -331,7 +331,6 @@ public:
     // NGEN stuff
     // 
 
-    void Save(DataImage *image);
     void Fixup(DataImage *image, MethodDesc * pMD);
 
     BOOL IsPrebound(DataImage *image);
