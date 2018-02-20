@@ -3351,13 +3351,7 @@ MethodDesc::Fixup(
         pTemporaryEntryPoint->Fixup(image, this);
     }
 
-    if (pNewMD->HasPrecode())
-    {
-        // Clear the HasPrecode flag on the saved MD. Saved precodes can't be used as stable entry points
-        // because they can't be directly patched (RX only), so we treat them as temporary entry points instead.
-        _ASSERTE(!pNewMD->HasStableEntryPoint());
-        pNewMD->m_bFlags2 &= ~enum_flag2_HasPrecode;
-    }
+    _ASSERTE(!pNewMD->HasPrecode());
 
     if (IsDynamicMethod())
     {
@@ -3766,24 +3760,21 @@ void MethodDesc::SaveChunk::SaveOneChunk(COUNT_T start, COUNT_T count, ULONG siz
             precodeSaveChunk.AddPrecodeForMethod(pMD, pMethodInfo->m_fHasPrecode);
         }
 
+        // Zapped precodes can't be patched (they are read/execute only) and so we can't use them
+        // as stable entry points (since we would go through PreStub all the time).
+        // So instead treat these as temporary entry points (no no stable entry point flag and no precode flag).
+        // Temporary entry points are effectively marked as those without HasPrecode and StableEntryPoint flags.
+        pNewMD->m_bFlags2 &= ~enum_flag2_HasPrecode;
         if (pMethodInfo->m_fHasPrecode)
         {
             _ASSERTE(hasTemporaryEntryPoints);
-
-            // Zapped precodes can't be patched (they are read/execute only) and so we can't use them
-            // as stable entry points (since we would go through PreStub all the time).
-            // So instead treat these as temporary entry points (no no stable entry point flag and no precode flag).
             pNewMD->m_bFlags2 &= ~enum_flag2_HasStableEntryPoint;
-
-            // Mark the MD as having a precode for now (we need to remember this to call Fixup on the precode during
-            // the fixup phase). The MethodDesc::Fixup will clear it.
-            pNewMD->m_bFlags2 |= enum_flag2_HasPrecode;
         }
         else
         {
             // If the method doesn't have a precode, then its entry point is stable
+            // since we can use the store code directly.
             pNewMD->m_bFlags2 |= enum_flag2_HasStableEntryPoint;
-            pNewMD->m_bFlags2 &= ~enum_flag2_HasPrecode;
         }
 
         if (pMethodInfo->m_fHasNativeCodeSlot)
