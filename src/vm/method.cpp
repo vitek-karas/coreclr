@@ -4867,40 +4867,19 @@ Precode* MethodDesc::GetOrCreatePrecode()
         return GetPrecode();
     }
 
+    _ASSERTE(HasTemporaryEntryPoint());
+
     PrecodeType requiredType = GetPrecodeType();
     PrecodeType availableType = PRECODE_INVALID;
 
     PTR_PCODE pSlot = GetAddrOfSlot();
-    PCODE pExpected;
-#ifdef FEATURE_PREJIT
-    if (IsZapped())
-    {
-        // If the method is zapped, then the only way it may not have a stable entry point yet
-        // is that it has a precode. In this case it's not marked as having precode through HasPrecode
-        // instead the zapped precode acts as a temporary entry point.
-        pExpected = ::VolatileLoadWithoutBarrier(pSlot);
-        Module * pZapModule = GetZapModule();
-        if ((pZapModule == NULL) || !pZapModule->IsZappedPrecode(pExpected))
-        {
-            // This should really only happen if there is a race between two threads calling GetOrCreatePrecode at the same time.
-            // In that case the slot should either contain the zapped precode, or the newly allocated runtime precode.
-            // So try to "reuse" the runtime allocated precode - this should always succeed, since we should not need a different precode type.
-            availableType = Precode::GetPrecodeFromEntryPoint(pExpected)->GetType();
-        }
+    PCODE pExpected = GetTemporaryEntryPoint();
 
-        // Otherwise, force creation of a runtime allocated precode which can act as a stable entrypoint.
-        // - keep availableType = PRECODE_INVALID.
-    }
-    else
-#endif
+    // If the method has compact entry points the existing precode (the compact entry point) can't be patched.
+    // If the method is zapped, then the temporary entry point also can't be patched (it's RX only).
+    if (!GetMethodDescChunk()->HasCompactEntryPoints() && !IsZapped())
     {
-        pExpected = GetTemporaryEntryPoint();
-
-        // If the method has compact entry points the existing precode (the compact entry point) can't be patched.
-        if (!GetMethodDescChunk()->HasCompactEntryPoints() && !IsZapped())
-        {
-            availableType = Precode::GetPrecodeFromEntryPoint(pExpected)->GetType();
-        }
+        availableType = Precode::GetPrecodeFromEntryPoint(pExpected)->GetType();
     }
 
     // Allocate the precode if necessary
@@ -4963,7 +4942,7 @@ BOOL MethodDesc::SetNativeCodeInterlocked(PCODE addr, PCODE pExpected /*=NULL*/)
 }
 
 //*******************************************************************************
-BOOL MethodDesc::SetStableEntryPointInterlocked(PCODE addr, PTR_PCODE ppPreviousEntryPoint /*=NULL*/)
+BOOL MethodDesc::SetStableEntryPointInterlocked(PCODE addr)
 {
     CONTRACTL {
         THROWS;
@@ -4972,35 +4951,8 @@ BOOL MethodDesc::SetStableEntryPointInterlocked(PCODE addr, PTR_PCODE ppPrevious
 
     _ASSERTE(!HasPrecode());
 
+    PCODE pExpected = GetTemporaryEntryPoint();
     PTR_PCODE pSlot = GetAddrOfSlot();
-    PCODE pExpected;
-#ifdef FEATURE_PREJIT
-    if (IsZapped())
-    {
-        // If the method is zapped, then the only way it may not have a stable entry point yet
-        // is that it has a precode.
-        pExpected = ::VolatileLoadWithoutBarrier(pSlot);
-        Module * pZapModule = GetZapModule();
-        if ((pZapModule == NULL) || !pZapModule->IsZappedPrecode(pExpected))
-        {
-            // This should really only happen if there is a race between two threads calling GetOrCreatePrecode at the same time.
-            // In that case the slot should either contain the zapped precode, or the newly allocated runtime precode.
-            // This is basically the same situation as if we run into a race right at the InterlockComparedExchange below.
-            // So set the expected to NULL which should never match the content of the slot and thus will fail the compare exchange below.
-            pExpected = NULL;
-        }
-    }
-    else
-#endif
-    {
-        pExpected = GetTemporaryEntryPoint();
-    }
-
-    if (ppPreviousEntryPoint != NULL)
-    {
-        *ppPreviousEntryPoint = pExpected;
-    }
-
     EnsureWritablePages(pSlot);
 
     BOOL fResult = FastInterlockCompareExchangePointer(pSlot, addr, pExpected) == pExpected;
