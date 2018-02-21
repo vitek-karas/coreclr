@@ -1693,6 +1693,22 @@ PCODE MethodDesc::DoPrestub(MethodTable *pDispatchingMT)
 
     GCStress<cfg_any, EeconfigFastGcSPolicy, CoopGcModePolicy>::MaybeTrigger();
 
+#ifdef HAS_REMOTING_PRECODE
+    /**************************   REMOTING   *************************/
+    // Zapped methods which need remoting precode are saved with normal temporary entry point
+    // (so fixup or stub precode). So the first time we run into them here we need to create
+    // the remoting precode for them and patch everywhere with it.
+    if (IsZapped() && GetPrecodeType() == PRECODE_REMOTING)
+    {
+        GetOrCreatePrecode();
+
+        // Need to return here since we're intentionally leaving the precode pointing to prestub still
+        // as actually resolving it could break things (in some cases remoting precode will never reach
+        // prestub and will take a shortcut, so running prestub on it will do more work then necessary
+        // and could potentially lead to new error cases).
+        RETURN DoBackpatch(pMT, pDispatchingMT, FALSE);
+    }
+#endif // HAS_REMOTING_PRECODE
 
 #ifdef FEATURE_COMINTEROP 
     /**************************   INTEROP   *************************/
