@@ -1534,7 +1534,7 @@ public:
     {
         DataImage * m_pImage;
 
-        ZapNode * m_pFirstNode;
+        ZapStoredStructure * m_pFirstNode;
         MethodDescChunk * m_pLastChunk;
 
         typedef enum _MethodPriorityEnum
@@ -1575,7 +1575,7 @@ public:
 
         void Append(MethodDesc * pMD);
 
-        ZapNode * Save();
+        ZapStoredStructure * Save();
     };
 
     bool CanSkipDoPrestub(MethodDesc * callerMD, 
@@ -2132,6 +2132,11 @@ public:
     // The chunk is preceded by a temporary entry point slot.
     // For zapped chunks the slot is a relative pointer, for non-zapped it's a direct address.
     typedef RelativePointer<TADDR> TemporaryEntryPointsSlot;
+
+    // The offset of the MethodDescChunk structure in the node where it's saved (since it doesn't start at 0).
+    static const ULONG OffsetInSavedNode = sizeof(TemporaryEntryPointsSlot);
+    // The offset where the MethodDesc array starts in the saved node.
+    static const ULONG OffsetOfMethodDescsInSavedNode;
 
     // Maximum size of one chunk (corresponts to the maximum of m_size = 0xFF)
     static const SIZE_T MaxSizeOfMethodDescs = 0x100 * MethodDesc::ALIGNMENT;
