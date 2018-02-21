@@ -698,7 +698,7 @@ void FixupPrecode::Fixup(DataImage *image, MethodDesc * pMD)
     // Set the actual chunk index
     FixupPrecode * pNewPrecode = (FixupPrecode *)image->GetImagePointer(this);
 
-    size_t mdOffset = mdChunkOffset - sizeof(MethodDescChunk);
+    size_t mdOffset = mdChunkOffset - MethodDescChunk::OffsetOfMethodDescsInSavedNode;
     size_t chunkIndex = mdOffset / MethodDesc::ALIGNMENT;
     _ASSERTE(FitsInU1(chunkIndex));
     pNewPrecode->m_MethodDescChunkIndex = (BYTE)chunkIndex;
@@ -707,7 +707,7 @@ void FixupPrecode::Fixup(DataImage *image, MethodDesc * pMD)
     if (m_PrecodeChunkIndex == 0)
     {
         image->FixupFieldToNode(this, (BYTE *)GetBase() - (BYTE *)this,
-            pMDChunkNode, sizeof(MethodDescChunk));
+            pMDChunkNode, MethodDescChunk::OffsetOfMethodDescsInSavedNode);
     }
 }
 #endif // FEATURE_NATIVE_IMAGE_GENERATION

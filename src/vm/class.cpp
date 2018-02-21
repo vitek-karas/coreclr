@@ -3009,9 +3009,9 @@ void EEClass::Save(DataImage *image, MethodTable *pMT)
             methodDescSaveChunk.Append(pMD);
         }
 
-        ZapNode * pChunksNode = methodDescSaveChunk.Save();
+        ZapStoredStructure * pChunksNode = methodDescSaveChunk.Save();
         if (pChunksNode != NULL)    
-            image->BindPointer(chunk, pChunksNode, 0);
+            image->BindPointer(chunk, pChunksNode, MethodDescChunk::OffsetInSavedNode);
 
     }
 
