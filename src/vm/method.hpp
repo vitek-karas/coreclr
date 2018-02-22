@@ -250,7 +250,7 @@ public:
         return GetMethodEntryPoint();
     }
 
-    BOOL SetStableEntryPointInterlocked(PCODE addr, PTR_PCODE ppPreviousEntryPoint = NULL);
+    BOOL SetStableEntryPointInterlocked(PCODE addr);
 
     BOOL HasTemporaryEntryPoint();
     PCODE GetTemporaryEntryPoint();
@@ -1635,13 +1635,11 @@ public:
     //     pDispatchingMT - method table of the object that the method is being dispatched on, can be NULL.
     //     fFullBackPatch - indicates whether to patch all possible slots, including the ones 
     //                      expensive to patch
-    //     pPreviousEntryPoint - if this is not NULL, the value is used as the expected value for all the patching
-    //                           that is slots with this value will be patched.
     //                      
     // Return value:
     //     stable entry point (code:MethodDesc::GetStableEntryPoint())
     //
-    PCODE DoBackpatch(MethodTable * pMT, MethodTable * pDispatchingMT, BOOL fFullBackPatch, PCODE pPreviousEntryPoint);
+    PCODE DoBackpatch(MethodTable * pMT, MethodTable * pDispatchingMT, BOOL fFullBackPatch);
 
     PCODE DoPrestub(MethodTable *pDispatchingMT);
 
@@ -1966,14 +1964,21 @@ public:
     BOOL HasTemporaryEntryPoints()
     {
         LIMITED_METHOD_CONTRACT;
-        return !IsZapped();
+        return GetTemporaryEntryPoints() != NULL;
+    }
+
+    TADDR GetTemporaryEntryPointsSlot()
+    {
+        LIMITED_METHOD_CONTRACT;
+        _ASSERTE(sizeof(TADDR) == sizeof(TemporaryEntryPointsSlot));
+        return dac_cast<TADDR>(this) - sizeof(TADDR);
     }
 
     TADDR GetTemporaryEntryPoints()
     {
         LIMITED_METHOD_CONTRACT;
-        _ASSERTE(HasTemporaryEntryPoints());
-        return *(dac_cast<DPTR(TADDR)>(this) - 1);
+        TADDR pSlot = GetTemporaryEntryPointsSlot();
+        return IsZapped() ? TemporaryEntryPointsSlot::GetValueAtPtr(pSlot) : *PTR_TADDR(pSlot);
     }
 
     PCODE GetTemporaryEntryPoint(int index);
@@ -2123,6 +2128,15 @@ public:
         LIMITED_METHOD_DAC_CONTRACT;
         return PTR_MethodDesc(dac_cast<TADDR>(this) + sizeof(MethodDescChunk));
     }
+
+    // The chunk is preceded by a temporary entry point slot.
+    // For zapped chunks the slot is a relative pointer, for non-zapped it's a direct address.
+    typedef RelativePointer<TADDR> TemporaryEntryPointsSlot;
+
+    // The offset of the MethodDescChunk structure in the node where it's saved (since it doesn't start at 0).
+    static const ULONG OffsetInSavedNode = sizeof(TemporaryEntryPointsSlot);
+    // The offset where the MethodDesc array starts in the saved node.
+    static const ULONG OffsetOfMethodDescsInSavedNode;
 
     // Maximum size of one chunk (corresponts to the maximum of m_size = 0xFF)
     static const SIZE_T MaxSizeOfMethodDescs = 0x100 * MethodDesc::ALIGNMENT;

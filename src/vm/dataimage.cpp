@@ -1199,15 +1199,16 @@ ZapNode * DataImage::GetGenericSignature(PVOID signature, BOOL fMethod)
 
 #if defined(_TARGET_X86_) || defined(_TARGET_AMD64_)
 
-class ZapStubPrecode : public ZapNode
+#ifdef HAS_NDIRECT_IMPORT_PRECODE
+class ZapNDirectImportPrecode : public ZapNode
 {
-protected:
+private:
     MethodDesc * m_pMD;
     DataImage::ItemKind m_kind;
 
 public:
-    ZapStubPrecode(MethodDesc * pMethod, DataImage::ItemKind kind)
-        : m_pMD(pMethod), m_kind(kind)
+    ZapNDirectImportPrecode(MethodDesc * pMD, DataImage::ItemKind kind)
+        : m_pMD(pMD), m_kind(kind)
     {
     }
 
@@ -1255,35 +1256,6 @@ public:
             pNode, (int)offset, IMAGE_REL_BASED_PTR);
 
         pImage->WriteReloc(&precode, offsetof(StubPrecode, m_rel32),
-            pImage->GetHelperThunk(CORINFO_HELP_EE_PRESTUB), 0, IMAGE_REL_BASED_REL32);
-
-        pZapWriter->Write(&precode, sizeof(precode));
-    }
-};
-
-#ifdef HAS_NDIRECT_IMPORT_PRECODE
-class ZapNDirectImportPrecode : public ZapStubPrecode
-{
-public:
-    ZapNDirectImportPrecode(MethodDesc * pMD, DataImage::ItemKind kind)
-        : ZapStubPrecode(pMD, kind)
-    {
-    }
-
-    virtual void Save(ZapWriter * pZapWriter)
-    {
-        ZapImage * pImage = ZapImage::GetImage(pZapWriter);
-
-        StubPrecode precode;
-
-        precode.Init(m_pMD);
-
-        SSIZE_T offset;
-        ZapNode * pNode = pImage->m_pDataImage->GetNodeForStructure(m_pMD, &offset);
-        pImage->WriteReloc(&precode, offsetof(StubPrecode, m_pMethodDesc),
-            pNode, (int)offset, IMAGE_REL_BASED_PTR);
-
-        pImage->WriteReloc(&precode, offsetof(StubPrecode, m_rel32),
             pImage->GetHelperThunk(CORINFO_HELP_EE_PINVOKE_FIXUP), 0, IMAGE_REL_BASED_REL32);
 
         pZapWriter->Write(&precode, sizeof(precode));
@@ -1291,22 +1263,23 @@ public:
 };
 #endif // HAS_NDIRECT_IMPORT_PRECODE
 
-#ifdef HAS_REMOTING_PRECODE
-class ZapRemotingPrecode : public ZapNode
+class ZapStubPrecodeChunk : public ZapNode
 {
-    MethodDesc * m_pMD;
+protected:
+    MethodDesc ** m_ppMD;
+    COUNT_T m_count;
+    SSIZE_T m_sizeOfOne;
     DataImage::ItemKind m_kind;
-    BOOL m_fIsPrebound;
 
 public:
-    ZapRemotingPrecode(MethodDesc * pMethod, DataImage::ItemKind kind, BOOL fIsPrebound)
-        : m_pMD(pMethod), m_kind(kind), m_fIsPrebound(fIsPrebound)
+    ZapStubPrecodeChunk(MethodDesc ** ppMethod, COUNT_T count, SSIZE_T sizeOfOne, DataImage::ItemKind kind)
+        : m_ppMD(ppMethod), m_count(count), m_sizeOfOne(sizeOfOne), m_kind(kind)
     {
     }
 
     virtual DWORD GetSize()
     {
-        return sizeof(RemotingPrecode);
+        return m_count * m_sizeOfOne;
     }
 
     virtual UINT GetAlignment()
@@ -1323,9 +1296,17 @@ public:
     {
         dwPos = AlignUp(dwPos, GetAlignment());
 
-        // Alignment for straddlers
-        if (AlignmentTrim(dwPos + offsetof(RemotingPrecode, m_pMethodDesc), RELOCATION_PAGE_SIZE) > RELOCATION_PAGE_SIZE - sizeof(TADDR))
-            dwPos += GetAlignment();
+        BOOL foundStraddler = FALSE;
+        for (COUNT_T i = 0; i < m_count; i++)
+        {
+            // Alignment for straddlers. Need a cast to help gcc choose between AlignmentTrim(UINT,UINT) and (UINT64,UINT).
+            if (AlignmentTrim(static_cast<UINT>(dwPos + (m_sizeOfOne * i) + offsetof(StubPrecode, m_pMethodDesc)), RELOCATION_PAGE_SIZE) > RELOCATION_PAGE_SIZE - sizeof(TADDR))
+                foundStraddler = TRUE;
+        }
+
+        // We have to keep all the precodes saved in one chunk (since they are used as temporary entry points
+        // and looked up based on index), so if we found straddlers, move the entire chunk to start on a page boundary.
+        dwPos = AlignUp(static_cast<UINT>(dwPos), RELOCATION_PAGE_SIZE);
 
         SetRVA(dwPos);
 
@@ -1337,85 +1318,58 @@ public:
     virtual void Save(ZapWriter * pZapWriter)
     {
         ZapImage * pImage = ZapImage::GetImage(pZapWriter);
+        SSIZE_T size = m_count * m_sizeOfOne;
+        TADDR pBase = (TADDR)new (pImage->GetHeap()) BYTE[size];
 
-        RemotingPrecode precode;
-
-        precode.Init(m_pMD);
-
-        SSIZE_T offset;
-        ZapNode * pNode = pImage->m_pDataImage->GetNodeForStructure(m_pMD, &offset);
-        pImage->WriteReloc(&precode, offsetof(RemotingPrecode, m_pMethodDesc),
-            pNode, offset, IMAGE_REL_BASED_PTR);
-
-        pImage->WriteReloc(&precode, offsetof(RemotingPrecode, m_callRel32),
-            pImage->GetHelperThunk(CORINFO_HELP_EE_REMOTING_THUNK), 0, IMAGE_REL_BASED_REL32);
-
-        if (m_fIsPrebound)
+        for (COUNT_T i = 0; i < m_count; i++)
         {
-            pImage->WriteReloc(&precode, offsetof(RemotingPrecode, m_rel32),
-                pImage->m_pDataImage->GetCodeAddress(m_pMD), 0, IMAGE_REL_BASED_REL32);
-        }
-        else
-        {
-            pImage->WriteReloc(&precode, offsetof(RemotingPrecode, m_rel32),
+            StubPrecode * pPrecode = (StubPrecode *)(pBase + (m_sizeOfOne * i));
+            pPrecode->Init(m_ppMD[i]);
+
+            _ASSERTE((Precode *)pPrecode == Precode::GetPrecodeForTemporaryEntryPoint(pBase, i));
+
+            SSIZE_T offset;
+            ZapNode * pNode = pImage->m_pDataImage->GetNodeForStructure(m_ppMD[i], &offset);
+            pImage->WriteReloc(pPrecode, offsetof(StubPrecode, m_pMethodDesc),
+                pNode, (int)offset, IMAGE_REL_BASED_PTR);
+
+            pImage->WriteReloc(pPrecode, offsetof(StubPrecode, m_rel32),
                 pImage->GetHelperThunk(CORINFO_HELP_EE_PRESTUB), 0, IMAGE_REL_BASED_REL32);
         }
 
-        pZapWriter->Write(&precode, sizeof(precode));
+        pZapWriter->Write(PVOID(pBase), size);
     }
-
-    BOOL IsPrebound(ZapImage * pImage)
-    {
-        // This will make sure that when IBC logging is on, the precode goes thru prestub.
-        if (GetAppDomain()->ToCompilationDomain()->m_fForceInstrument)
-            return FALSE;
-
-        // Prebind the remoting precode if possible
-        return pImage->m_pDataImage->CanDirectCall(m_pMD, CORINFO_ACCESS_THIS);
-    }
-
 };
-#endif // HAS_REMOTING_PRECODE
 
-void DataImage::SavePrecode(PVOID ptr, MethodDesc * pMD, PrecodeType t, ItemKind kind, BOOL fIsPrebound)
+void DataImage::SaveStubPrecodeChunk(TADDR ptr, SSIZE_T sizeOfOne, MethodDesc ** ppMD, COUNT_T count, ItemKind kind)
 {
-    ZapNode * pNode = NULL;
+    MethodDesc ** ppMDCopy = (MethodDesc **) new (GetHeap()) BYTE[sizeof(MethodDesc *) * count];
+    ZapStubPrecodeChunk * pNode = new (GetHeap()) ZapStubPrecodeChunk(ppMDCopy, count, sizeOfOne, kind);
 
-    switch (t) {
-    case PRECODE_STUB:
-        pNode = new (GetHeap()) ZapStubPrecode(pMD, kind);
-        GetHelperThunk(CORINFO_HELP_EE_PRESTUB);
-        break;
+    SSIZE_T offset = 0;
+    for (COUNT_T i = 0; i < count; i++)
+    {
+        ppMDCopy[i] = ppMD[i];
+        BindPointer(PVOID(ptr + offset), pNode, offset);
+        offset += sizeOfOne;
+    }
+
+    GetHelperThunk(CORINFO_HELP_EE_PRESTUB);
+
+    AddStructureInOrder(pNode);
+}
 
 #ifdef HAS_NDIRECT_IMPORT_PRECODE
-    case PRECODE_NDIRECT_IMPORT:
-        pNode = new (GetHeap()) ZapNDirectImportPrecode(pMD, kind);
-        GetHelperThunk(CORINFO_HELP_EE_PINVOKE_FIXUP);
-        break;
-#endif // HAS_NDIRECT_IMPORT_PRECODE
-
-#ifdef HAS_REMOTING_PRECODE
-    case PRECODE_REMOTING:
-        pNode = new (GetHeap()) ZapRemotingPrecode(pMD, kind, fIsPrebound);
-
-        GetHelperThunk(CORINFO_HELP_EE_REMOTING_THUNK);
-
-        if (!fIsPrebound)
-        {
-            GetHelperThunk(CORINFO_HELP_EE_PRESTUB);
-        }
-        break;
-#endif // HAS_REMOTING_PRECODE
-
-    default:
-        _ASSERTE(!"Unexpected precode type");
-        break;
-    }
+void DataImage::SaveNDirectPrecode(PVOID ptr, MethodDesc * pMD, ItemKind kind)
+{
+    ZapNode * pNode = new (GetHeap()) ZapNDirectImportPrecode(pMD, kind);
+    GetHelperThunk(CORINFO_HELP_EE_PINVOKE_FIXUP);
 
     BindPointer(ptr, pNode, 0);
 
     AddStructureInOrder(pNode);
 }
+#endif // HAS_NDIRECT_IMPORT_PRECODE
 
 #endif // _TARGET_X86_ || _TARGET_AMD64_
 

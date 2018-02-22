@@ -2702,7 +2702,7 @@ void MethodDesc::Save(DataImage *image)
         {
             // import thunk is only needed if the P/Invoke is inlinable
 #if defined(_TARGET_X86_) || defined(_TARGET_AMD64_)  
-            image->SavePrecode(pNMD->GetNDirectImportThunkGlue(), pNMD, PRECODE_NDIRECT_IMPORT, DataImage::ITEM_METHOD_PRECODE_COLD);
+            image->SaveNDirectPrecode(pNMD->GetNDirectImportThunkGlue(), pNMD, DataImage::ITEM_METHOD_PRECODE_COLD);
 #else
             image->StoreStructure(pNMD->GetNDirectImportThunkGlue(), sizeof(NDirectImportThunkGlue), DataImage::ITEM_METHOD_PRECODE_COLD);
 #endif
@@ -3339,20 +3339,19 @@ MethodDesc::Fixup(
         {
             image->FixupRelativePointerField(pNewChunk, offsetof(MethodDescChunk, m_next));
         }
+
+        image->FixupRelativePointerField(PVOID(pNewChunk->GetTemporaryEntryPointsSlot()), 0);
     }
 
-    if (pNewMD->HasPrecode())
+    // Temporary entry points are registered as surrogates of the "new" MDs.
+    // The "old" MDs only have surrogates registered if they need to use them as precodes.
+    Precode * pTemporaryEntryPoint = (Precode *)image->LookupSurrogate(pNewMD);
+    if (pTemporaryEntryPoint != NULL)
     {
-        Precode* pPrecode = GetSavedPrecode(image);
-
-        // Fixup the precode if we have stored it
-        pPrecode->Fixup(image, this);
-
-        // Clear the HasPrecode flag on the saved MD. Saved precodes can't be used as stable entry points
-        // because they can't be directly patched (RX only), so we treat them as temporary entry points instead.
-        _ASSERTE(!pNewMD->HasStableEntryPoint());
-        pNewMD->m_bFlags2 &= ~enum_flag2_HasPrecode;
+        pTemporaryEntryPoint->Fixup(image, this);
     }
+
+    _ASSERTE(!pNewMD->HasPrecode());
 
     if (IsDynamicMethod())
     {
@@ -3612,7 +3611,6 @@ void MethodDesc::FixupSlot(DataImage *image, PVOID p, SSIZE_T offset, ZapRelocat
 {
     STANDARD_VM_CONTRACT;
 
-
     Precode* pPrecode = GetSavedPrecodeOrNull(image);
     if (pPrecode != NULL)
     {
@@ -3660,6 +3658,8 @@ SIZE_T MethodDesc::SaveChunk::GetSavedMethodDescSize(MethodInfo * pMethodInfo)
     return size;
 }
 
+const ULONG MethodDescChunk::OffsetOfMethodDescsInSavedNode = MethodDescChunk::OffsetInSavedNode + sizeof(MethodDescChunk);
+
 //*******************************************************************************
 void MethodDesc::SaveChunk::SaveOneChunk(COUNT_T start, COUNT_T count, ULONG sizeOfMethodDescs, DWORD priority)
 {
@@ -3684,15 +3684,21 @@ void MethodDesc::SaveChunk::SaveOneChunk(COUNT_T start, COUNT_T count, ULONG siz
         UNREACHABLE();
     }
 
-    ULONG size = sizeOfMethodDescs + sizeof(MethodDescChunk);
+    ULONG size = sizeOfMethodDescs + sizeof(MethodDescChunk) + sizeof(MethodDescChunk::TemporaryEntryPointsSlot);
     ZapStoredStructure * pNode = m_pImage->StoreStructure(NULL, size, kind);
 
     BYTE * pData = (BYTE *)m_pImage->GetImagePointer(pNode);
+    ULONG offset = 0;
 
-    MethodDescChunk * pNewChunk = (MethodDescChunk *)pData;
-
+    MethodDescChunk::TemporaryEntryPointsSlot * pTemporaryEntryPointsSlot =
+        (MethodDescChunk::TemporaryEntryPointsSlot *)pData;
     // Bind the image space so we can use the regular fixup helpers
-    m_pImage->BindPointer(pNewChunk, pNode, 0);
+    m_pImage->BindPointer(pTemporaryEntryPointsSlot, pNode, offset);
+    offset += sizeof(MethodDescChunk::TemporaryEntryPointsSlot);
+
+    MethodDescChunk * pNewChunk = (MethodDescChunk *)(pData + offset);
+    m_pImage->BindPointer(pNewChunk, pNode, offset);
+    offset += sizeof(MethodDescChunk);
 
     pNewChunk->SetMethodTable(m_methodInfos[start].m_pMD->GetMethodTable());
 
@@ -3703,11 +3709,31 @@ void MethodDesc::SaveChunk::SaveOneChunk(COUNT_T start, COUNT_T count, ULONG siz
 
     Precode::SaveChunk precodeSaveChunk; // Helper for saving precodes in chunks
 
-    ULONG offset = sizeof(MethodDescChunk);
+    // Determine if this chunk will have temporary entry points (precodes) or not
+    // Need to know up front since it's all or nothing - either all methods get the precode
+    // or none will.
+    BOOL hasTemporaryEntryPoints = FALSE;
+    for (COUNT_T i = 0; i < count; i++)
+    {
+        MethodInfo * pMethodInfo = &(m_methodInfos[start + i]);
+        if (pMethodInfo->m_fHasPrecode)
+            hasTemporaryEntryPoints = TRUE;
+    }
+
+    _ASSERTE(offset == MethodDescChunk::OffsetOfMethodDescsInSavedNode);
     for (COUNT_T i = 0; i < count; i++)
     {
         MethodInfo * pMethodInfo = &(m_methodInfos[start + i]);
         MethodDesc * pMD = pMethodInfo->m_pMD;
+
+#ifdef DEBUG
+        if (pMD->IsUnboxingStub() && pMD->IsTightlyBoundToMethodTable())
+        {
+            // Wrapped method desc has to immediately follow unboxing stub, and both have to be in one chunk
+            _ASSERTE(i + 1 < count);
+            _ASSERTE(m_methodInfos[start + i + 1].m_pMD->GetMemberDef() == m_methodInfos[start + i].m_pMD->GetMemberDef());
+        }
+#endif
 
         m_pImage->BindPointer(pMD, pNode, offset);
 
@@ -3722,27 +3748,29 @@ void MethodDesc::SaveChunk::SaveOneChunk(COUNT_T start, COUNT_T count, ULONG siz
         else
             pNewMD->m_wFlags &= ~mdcMethodImpl;
 
-        pNewMD->m_chunkIndex = (BYTE) ((offset - sizeof(MethodDescChunk)) / MethodDesc::ALIGNMENT);
+        pNewMD->m_chunkIndex = (BYTE) ((offset - MethodDescChunk::OffsetOfMethodDescsInSavedNode) / MethodDesc::ALIGNMENT);
         _ASSERTE(pNewMD->GetMethodDescChunk() == pNewChunk);
 
+        if (hasTemporaryEntryPoints)
+        {
+            precodeSaveChunk.AddPrecodeForMethod(pMD, pMethodInfo->m_fHasPrecode);
+        }
+
+        // Zapped precodes can't be patched (they are read/execute only) and so we can't use them
+        // as stable entry points (since we would go through PreStub all the time).
+        // So instead treat these as temporary entry points (no no stable entry point flag and no precode flag).
+        // Temporary entry points are effectively marked as those without HasPrecode and StableEntryPoint flags.
+        pNewMD->m_bFlags2 &= ~enum_flag2_HasPrecode;
         if (pMethodInfo->m_fHasPrecode)
         {
-            precodeSaveChunk.Save(m_pImage, pMD);
-
-            // Zapped precodes can't be patched (they are read/execute only) and so we can't use them
-            // as stable entry points (since we would go through PreStub all the time).
-            // So instead treat these as temporary entry points (no no stable entry point flag and no precode flag).
+            _ASSERTE(hasTemporaryEntryPoints);
             pNewMD->m_bFlags2 &= ~enum_flag2_HasStableEntryPoint;
-
-            // Mark the MD as having a precode for now (we need to remember this to call Fixup on the precode during
-            // the fixup phase). The MethodDesc::Fixup will clear it.
-            pNewMD->m_bFlags2 |= enum_flag2_HasPrecode;
         }
         else
         {
             // If the method doesn't have a precode, then its entry point is stable
+            // since we can use the store code directly.
             pNewMD->m_bFlags2 |= enum_flag2_HasStableEntryPoint;
-            pNewMD->m_bFlags2 &= ~enum_flag2_HasPrecode;
         }
 
         if (pMethodInfo->m_fHasNativeCodeSlot)
@@ -3769,9 +3797,12 @@ void MethodDesc::SaveChunk::SaveOneChunk(COUNT_T start, COUNT_T count, ULONG siz
 
         offset += GetSavedMethodDescSize(pMethodInfo);
     }
-    _ASSERTE(offset == sizeOfMethodDescs + sizeof(MethodDescChunk));
+    _ASSERTE(offset == sizeOfMethodDescs + MethodDescChunk::OffsetOfMethodDescsInSavedNode);
 
-    precodeSaveChunk.Flush(m_pImage);
+    PVOID pTemporaryEntryPoints = precodeSaveChunk.Save(m_pImage);
+    _ASSERTE((hasTemporaryEntryPoints && pTemporaryEntryPoints != NULL) ||
+        (!hasTemporaryEntryPoints && pTemporaryEntryPoints == NULL));
+    pTemporaryEntryPointsSlot->SetValueMaybeNull(TADDR(pTemporaryEntryPoints));
 
     if (m_methodInfos[start].m_pMD->IsTightlyBoundToMethodTable())
     {
@@ -3873,7 +3904,11 @@ int __cdecl MethodDesc::SaveChunk::MethodInfoCmp(const void* a_, const void* b_)
 
     // Place unboxing stubs first, code:MethodDesc::FindOrCreateAssociatedMethodDesc depends on this invariant
     int unboxingDiff = (int)(b->m_pMD->IsUnboxingStub() - a->m_pMD->IsUnboxingStub());
-    return unboxingDiff;
+    if (unboxingDiff != 0)
+        return unboxingDiff;
+
+    int hasPrecodeDiff = (a->m_fHasPrecode ? 1 : 0) - (b->m_fHasPrecode ? 1 : 0);
+    return hasPrecodeDiff;
 }
 
 //*******************************************************************************
@@ -3889,6 +3924,8 @@ ZapStoredStructure * MethodDesc::SaveChunk::Save()
     int currentTokenRange = -1;
     int nextStart = 0;
     SIZE_T sizeOfMethodDescs = 0;
+    BOOL currentHasPrecode = FALSE;
+    BOOL previousIsUnboxingStub = FALSE;
 
     //
     // Go over all MethodDescs and create smallest number of chunks possible
@@ -3901,23 +3938,39 @@ ZapStoredStructure * MethodDesc::SaveChunk::Save()
 
         DWORD priority = pMethodInfo->m_priority;
         int tokenRange = GetTokenRange(pMD->GetMemberDef());
+        BOOL hasPrecode = pMethodInfo->m_fHasPrecode;
 
         SIZE_T size = GetSavedMethodDescSize(pMethodInfo);
 
         // Bundle that has to be in same chunk
         SIZE_T bundleSize = size;
 
+        if (previousIsUnboxingStub)
+        {
+            // We need to keep the unboxing stub and the wrapped method descs in the same chunk.
+            // Since they both have the same priority and token range, the only chunk split
+            // might be caused by the hasPrecode. So if this is the wrapper method desc
+            // just "ignore" it's hasPrecode for the purposes of chunk splitting.
+            // In the worst possible case this may force the entire chunk to get precodes
+            // but that doesn't hurt anything other than size.
+            previousIsUnboxingStub = FALSE;
+            hasPrecode = currentHasPrecode;
+        }
+
         if (pMD->IsUnboxingStub() && pMD->IsTightlyBoundToMethodTable())
         {
-            // Wrapped method desc has to immediately follow unboxing stub, and both has to be in one chunk
+            // Wrapped method desc has to immediately follow unboxing stub, and both have to be in one chunk
             _ASSERTE(m_methodInfos[i+1].m_pMD->GetMemberDef() == m_methodInfos[i].m_pMD->GetMemberDef());
 
             // Make sure that both wrapped method desc and unboxing stub will fit into same chunk
             bundleSize += GetSavedMethodDescSize(&m_methodInfos[i+1]);
+
+            previousIsUnboxingStub = TRUE;
         }
 
         if (priority != currentPriority || 
             tokenRange != currentTokenRange ||
+            hasPrecode != currentHasPrecode ||
             sizeOfMethodDescs + bundleSize > MethodDescChunk::MaxSizeOfMethodDescs)
         {
             if (sizeOfMethodDescs != 0)
@@ -3928,6 +3981,7 @@ ZapStoredStructure * MethodDesc::SaveChunk::Save()
 
             currentPriority = priority;
             currentTokenRange = tokenRange;
+            currentHasPrecode = hasPrecode;
             sizeOfMethodDescs = 0;
         }
 
@@ -4809,40 +4863,19 @@ Precode* MethodDesc::GetOrCreatePrecode()
         return GetPrecode();
     }
 
+    _ASSERTE(HasTemporaryEntryPoint());
+
     PrecodeType requiredType = GetPrecodeType();
     PrecodeType availableType = PRECODE_INVALID;
 
     PTR_PCODE pSlot = GetAddrOfSlot();
-    PCODE pExpected;
-#ifdef FEATURE_PREJIT
-    if (IsZapped())
-    {
-        // If the method is zapped, then the only way it may not have a stable entry point yet
-        // is that it has a precode. In this case it's not marked as having precode through HasPrecode
-        // instead the zapped precode acts as a temporary entry point.
-        pExpected = ::VolatileLoadWithoutBarrier(pSlot);
-        Module * pZapModule = GetZapModule();
-        if ((pZapModule == NULL) || !pZapModule->IsZappedPrecode(pExpected))
-        {
-            // This should really only happen if there is a race between two threads calling GetOrCreatePrecode at the same time.
-            // In that case the slot should either contain the zapped precode, or the newly allocated runtime precode.
-            // So try to "reuse" the runtime allocated precode - this should always succeed, since we should not need a different precode type.
-            availableType = Precode::GetPrecodeFromEntryPoint(pExpected)->GetType();
-        }
+    PCODE pExpected = GetTemporaryEntryPoint();
 
-        // Otherwise, force creation of a runtime allocated precode which can act as a stable entrypoint.
-        // - keep availableType = PRECODE_INVALID.
-    }
-    else
-#endif
+    // If the method has compact entry points the existing precode (the compact entry point) can't be patched.
+    // If the method is zapped, then the temporary entry point also can't be patched (it's RX only).
+    if (!GetMethodDescChunk()->HasCompactEntryPoints() && !IsZapped())
     {
-        pExpected = GetTemporaryEntryPoint();
-
-        // If the method has compact entry points the existing precode (the compact entry point) can't be patched.
-        if (!GetMethodDescChunk()->HasCompactEntryPoints() && !IsZapped())
-        {
-            availableType = Precode::GetPrecodeFromEntryPoint(pExpected)->GetType();
-        }
+        availableType = Precode::GetPrecodeFromEntryPoint(pExpected)->GetType();
     }
 
     // Allocate the precode if necessary
@@ -4905,7 +4938,7 @@ BOOL MethodDesc::SetNativeCodeInterlocked(PCODE addr, PCODE pExpected /*=NULL*/)
 }
 
 //*******************************************************************************
-BOOL MethodDesc::SetStableEntryPointInterlocked(PCODE addr, PTR_PCODE ppPreviousEntryPoint /*=NULL*/)
+BOOL MethodDesc::SetStableEntryPointInterlocked(PCODE addr)
 {
     CONTRACTL {
         THROWS;
@@ -4914,35 +4947,8 @@ BOOL MethodDesc::SetStableEntryPointInterlocked(PCODE addr, PTR_PCODE ppPrevious
 
     _ASSERTE(!HasPrecode());
 
+    PCODE pExpected = GetTemporaryEntryPoint();
     PTR_PCODE pSlot = GetAddrOfSlot();
-    PCODE pExpected;
-#ifdef FEATURE_PREJIT
-    if (IsZapped())
-    {
-        // If the method is zapped, then the only way it may not have a stable entry point yet
-        // is that it has a precode.
-        pExpected = ::VolatileLoadWithoutBarrier(pSlot);
-        Module * pZapModule = GetZapModule();
-        if ((pZapModule == NULL) || !pZapModule->IsZappedPrecode(pExpected))
-        {
-            // This should really only happen if there is a race between two threads calling GetOrCreatePrecode at the same time.
-            // In that case the slot should either contain the zapped precode, or the newly allocated runtime precode.
-            // This is basically the same situation as if we run into a race right at the InterlockComparedExchange below.
-            // So set the expected to NULL which should never match the content of the slot and thus will fail the compare exchange below.
-            pExpected = NULL;
-        }
-    }
-    else
-#endif
-    {
-        pExpected = GetTemporaryEntryPoint();
-    }
-
-    if (ppPreviousEntryPoint != NULL)
-    {
-        *ppPreviousEntryPoint = pExpected;
-    }
-
     EnsureWritablePages(pSlot);
 
     BOOL fResult = FastInterlockCompareExchangePointer(pSlot, addr, pExpected) == pExpected;

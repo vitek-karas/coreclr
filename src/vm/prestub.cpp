@@ -67,7 +67,7 @@ EXTERN_C void STDCALL ThePreStubPatch();
 
 //==========================================================================
 
-PCODE MethodDesc::DoBackpatch(MethodTable * pMT, MethodTable *pDispatchingMT, BOOL fFullBackPatch, PCODE pPreviousEntryPoint)
+PCODE MethodDesc::DoBackpatch(MethodTable * pMT, MethodTable *pDispatchingMT, BOOL fFullBackPatch)
 {
     CONTRACTL
     {
@@ -80,31 +80,10 @@ PCODE MethodDesc::DoBackpatch(MethodTable * pMT, MethodTable *pDispatchingMT, BO
     PCODE pTarget = GetStableEntryPoint();
 
     BOOL hasZappedPrecodeEntryPoint = FALSE;
-#ifdef FEATURE_PREJIT
-    if (IsZapped() && pPreviousEntryPoint != NULL)
-    {
-        // If we're patching a zapped method which had a zapped precode as its entrypoint
-        // then go and patch all the slots which are pointing to that precode.
-        // Treat the zapped precode as a temporary entry point - since it also can't be patched directly.
-        Module * pZapModule = GetZapModule();
-        if ((pZapModule != NULL) && pZapModule->IsZappedPrecode(pPreviousEntryPoint))
-        {
-            hasZappedPrecodeEntryPoint = TRUE;
-        }
-    }
-#endif
-    if (!hasZappedPrecodeEntryPoint && !HasTemporaryEntryPoint())
+    if (!HasTemporaryEntryPoint())
         return pTarget;
 
-    PCODE pExpected;
-    if (pPreviousEntryPoint != NULL)
-    {
-        pExpected = pPreviousEntryPoint;
-    }
-    else
-    {
-        pExpected = GetTemporaryEntryPoint();
-    }
+    PCODE pExpected = GetTemporaryEntryPoint();
 
     if (pExpected == pTarget)
         return pTarget;
@@ -1714,6 +1693,23 @@ PCODE MethodDesc::DoPrestub(MethodTable *pDispatchingMT)
 
     GCStress<cfg_any, EeconfigFastGcSPolicy, CoopGcModePolicy>::MaybeTrigger();
 
+#ifdef HAS_REMOTING_PRECODE
+    /**************************   REMOTING   *************************/
+    // Zapped methods which need remoting precode are saved with normal temporary entry point
+    // (so fixup or stub precode). So the first time we run into them here we need to create
+    // the remoting precode for them and patch everywhere with it.
+    if (!HasStableEntryPoint() && GetPrecodeType() == PRECODE_REMOTING)
+    {
+        GetOrCreatePrecode();
+        _ASSERTE(HasStableEntryPoint());
+
+        // Need to return here since we're intentionally leaving the precode pointing to prestub still
+        // as actually resolving it could break things (in some cases remoting precode will never reach
+        // prestub and will take a shortcut, so running prestub on it will do more work then necessary
+        // and could potentially lead to new error cases).
+        RETURN DoBackpatch(pMT, pDispatchingMT, FALSE);
+    }
+#endif // HAS_REMOTING_PRECODE
 
 #ifdef FEATURE_COMINTEROP 
     /**************************   INTEROP   *************************/
@@ -1798,7 +1794,7 @@ PCODE MethodDesc::DoPrestub(MethodTable *pDispatchingMT)
 #if defined(FEATURE_JIT_PITCHING)
         MarkMethodNotPitchingCandidate(this);
 #endif
-        RETURN DoBackpatch(pMT, pDispatchingMT, TRUE, NULL);
+        RETURN DoBackpatch(pMT, pDispatchingMT, TRUE);
     }
     
     if (pCode)
@@ -1892,7 +1888,6 @@ PCODE MethodDesc::DoPrestub(MethodTable *pDispatchingMT)
     MemoryBarrier();
 #endif
 
-    PCODE pPreviousEntryPoint = NULL;
     if (pCode != NULL)
     {
         if (HasPrecode())
@@ -1900,7 +1895,7 @@ PCODE MethodDesc::DoPrestub(MethodTable *pDispatchingMT)
         else
             if (!HasStableEntryPoint())
             {
-                SetStableEntryPointInterlocked(pCode, &pPreviousEntryPoint);
+                SetStableEntryPointInterlocked(pCode);
             }
     }
     else
@@ -1921,7 +1916,7 @@ PCODE MethodDesc::DoPrestub(MethodTable *pDispatchingMT)
     _ASSERTE(!IsPointingToPrestub());
     _ASSERTE(HasStableEntryPoint());
 
-    RETURN DoBackpatch(pMT, pDispatchingMT, FALSE, pPreviousEntryPoint);
+    RETURN DoBackpatch(pMT, pDispatchingMT, FALSE);
 }
 
 #endif // !DACCESS_COMPILE
