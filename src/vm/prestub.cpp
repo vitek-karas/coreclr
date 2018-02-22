@@ -1698,9 +1698,10 @@ PCODE MethodDesc::DoPrestub(MethodTable *pDispatchingMT)
     // Zapped methods which need remoting precode are saved with normal temporary entry point
     // (so fixup or stub precode). So the first time we run into them here we need to create
     // the remoting precode for them and patch everywhere with it.
-    if (IsZapped() && GetPrecodeType() == PRECODE_REMOTING)
+    if (!HasStableEntryPoint() && GetPrecodeType() == PRECODE_REMOTING)
     {
         GetOrCreatePrecode();
+        _ASSERTE(HasStableEntryPoint());
 
         // Need to return here since we're intentionally leaving the precode pointing to prestub still
         // as actually resolving it could break things (in some cases remoting precode will never reach
