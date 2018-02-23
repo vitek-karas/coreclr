@@ -784,7 +784,7 @@ static PVOID SaveFixupPrecodeChunk(
 {
     STANDARD_VM_CONTRACT;
 
-    ULONG size = sizeof(FixupPrecode) * count + sizeof(PTR_MethodDesc);
+    SIZE_T size = sizeof(FixupPrecode) * count + sizeof(PTR_MethodDesc);
     FixupPrecode * pBase = (FixupPrecode *)new (image->GetHeap()) BYTE[size];
 
     ZapStoredStructure * pNode = image->StoreStructure(NULL, size, kind,
@@ -808,7 +808,7 @@ static PVOID SaveFixupPrecodeChunk(
             image->RegisterSurrogate(pMD, pPrecode);
     }
 
-    image->CopyData(pNode, pBase, size);
+    image->CopyData(pNode, pBase, (ULONG)size);
 
     return pBase;
 }
@@ -823,8 +823,8 @@ static PVOID SaveStubPrecodeChunk(
 {
     STANDARD_VM_CONTRACT;
 
-    ULONG sizeOfOne = Precode::SizeOfTemporaryEntryPoint(PRECODE_STUB);
-    ULONG size = sizeOfOne * count;
+    SIZE_T sizeOfOne = Precode::SizeOfTemporaryEntryPoint(PRECODE_STUB);
+    SIZE_T size = sizeOfOne * count;
     TADDR pBase = (TADDR)new (image->GetHeap()) BYTE[size];
 
     for (COUNT_T i = 0; i < count; i++)
@@ -852,7 +852,7 @@ static PVOID SaveStubPrecodeChunk(
         image->BindPointer((void *)(pBase + (sizeOfOne * i)), pNode, sizeOfOne * i);
     }
 
-    image->CopyData(pNode, (void *)pBase, size);
+    image->CopyData(pNode, (void *)pBase, (ULONG)size);
 #endif // defined(_TARGET_X86_) || defined(_TARGET_AMD64_)
 
     return (PVOID)pBase;
