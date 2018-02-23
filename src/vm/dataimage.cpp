@@ -1268,18 +1268,18 @@ class ZapStubPrecodeChunk : public ZapNode
 protected:
     MethodDesc ** m_ppMD;
     COUNT_T m_count;
-    SSIZE_T m_sizeOfOne;
+    SIZE_T m_sizeOfOne;
     DataImage::ItemKind m_kind;
 
 public:
-    ZapStubPrecodeChunk(MethodDesc ** ppMethod, COUNT_T count, SSIZE_T sizeOfOne, DataImage::ItemKind kind)
+    ZapStubPrecodeChunk(MethodDesc ** ppMethod, COUNT_T count, SIZE_T sizeOfOne, DataImage::ItemKind kind)
         : m_ppMD(ppMethod), m_count(count), m_sizeOfOne(sizeOfOne), m_kind(kind)
     {
     }
 
     virtual DWORD GetSize()
     {
-        return m_count * m_sizeOfOne;
+        return (DWORD)(m_count * m_sizeOfOne);
     }
 
     virtual UINT GetAlignment()
@@ -1318,7 +1318,7 @@ public:
     virtual void Save(ZapWriter * pZapWriter)
     {
         ZapImage * pImage = ZapImage::GetImage(pZapWriter);
-        SSIZE_T size = m_count * m_sizeOfOne;
+        SIZE_T size = m_count * m_sizeOfOne;
         TADDR pBase = (TADDR)new (pImage->GetHeap()) BYTE[size];
 
         for (COUNT_T i = 0; i < m_count; i++)
@@ -1337,16 +1337,16 @@ public:
                 pImage->GetHelperThunk(CORINFO_HELP_EE_PRESTUB), 0, IMAGE_REL_BASED_REL32);
         }
 
-        pZapWriter->Write(PVOID(pBase), size);
+        pZapWriter->Write(PVOID(pBase), (DWORD)size);
     }
 };
 
-void DataImage::SaveStubPrecodeChunk(TADDR ptr, SSIZE_T sizeOfOne, MethodDesc ** ppMD, COUNT_T count, ItemKind kind)
+void DataImage::SaveStubPrecodeChunk(TADDR ptr, SIZE_T sizeOfOne, MethodDesc ** ppMD, COUNT_T count, ItemKind kind)
 {
     MethodDesc ** ppMDCopy = (MethodDesc **) new (GetHeap()) BYTE[sizeof(MethodDesc *) * count];
     ZapStubPrecodeChunk * pNode = new (GetHeap()) ZapStubPrecodeChunk(ppMDCopy, count, sizeOfOne, kind);
 
-    SSIZE_T offset = 0;
+    SIZE_T offset = 0;
     for (COUNT_T i = 0; i < count; i++)
     {
         ppMDCopy[i] = ppMD[i];

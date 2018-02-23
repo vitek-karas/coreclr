@@ -79,7 +79,6 @@ PCODE MethodDesc::DoBackpatch(MethodTable * pMT, MethodTable *pDispatchingMT, BO
     CONTRACTL_END;
     PCODE pTarget = GetStableEntryPoint();
 
-    BOOL hasZappedPrecodeEntryPoint = FALSE;
     if (!HasTemporaryEntryPoint())
         return pTarget;
 
@@ -107,7 +106,9 @@ PCODE MethodDesc::DoBackpatch(MethodTable * pMT, MethodTable *pDispatchingMT, BO
         }
 
 #ifndef HAS_COMPACT_ENTRYPOINTS
-        if (!hasZappedPrecodeEntryPoint)
+        // Zapped precodes can't be patched, so don't even try.
+        _ASSERTE(!IsZapped() || Precode::GetPrecodeFromEntryPoint(pExpected)->IsZapped());
+        if (!IsZapped())
         {
             // Patch the fake entrypoint if necessary
             Precode::GetPrecodeFromEntryPoint(pExpected)->SetTargetInterlocked(pTarget);
