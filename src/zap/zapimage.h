@@ -583,6 +583,12 @@ private:
 
     void GetCodeCompilationRange(CodeType codeType, COUNT_T * start, COUNT_T * end);
 
+    void ResolveMethodSlotReloc(
+        ZapMethodSlot * pMethodSlot,
+        ZapMethodHeader * pMethod,
+        ZapReloc * pReloc,
+        ZapBlobWithRelocs * pCode);
+
     void OutputCode(CodeType codeType);
     void OutputCodeInfo(CodeType codeType);
 

@@ -138,6 +138,51 @@ void ZapImage::GetCodeCompilationRange(CodeType codeType, COUNT_T * start, COUNT
 #endif // REDHAWK
 }
 
+void ZapImage::ResolveMethodSlotReloc(
+    ZapMethodSlot * pMethodSlot,
+    ZapMethodHeader * pMethod,
+    ZapReloc * pReloc,
+    ZapBlobWithRelocs * pCode)
+{
+    BOOL resolved = FALSE;
+    ZapNode * pTarget = m_pMethodSlots->CanDirectCall(pMethodSlot, pMethod);
+    if (pTarget)
+    {
+        PBYTE pCodeAtReloc = pCode->GetData() + pReloc->m_offset;
+#if defined(_TARGET_X86_) || defined(_TARGET_AMD64_)
+        if (*((PWORD)pCodeAtReloc - 1) == 0x15FF /*X86_INSTR_CALL_IND*/)
+        {
+            PBYTE pOriginal = pCodeAtReloc - sizeof(WORD);
+            _ASSERTE(*((DWORD *)(pOriginal + 2)) == 0); // Should be 0 offset, as we can't offset into a method slot.
+#if defined(_TARGET_X86_)
+            _ASSERTE(pReloc->m_type == IMAGE_REL_BASED_PTR);
+#else
+            _ASSERTE(pReloc->m_type == IMAGE_REL_BASED_REL32);
+#endif
+
+            pOriginal[0] = 0x90; /* X86_INSTR_NOP */
+            pOriginal[1] = 0xE8; /* X86_INSTR_CALL_REL32 */
+            pReloc->m_pTargetNode = pTarget;
+            pReloc->m_type = IMAGE_REL_BASED_REL32;
+            resolved = TRUE;
+        }
+#else
+        // The code will work if we do nothing here, it's just going to use indirect calls
+        // for all in-module calls in NGEN images, so with a perf hit.
+        // If possible we should see if we recognize the callsite and change it from
+        // an indirect call to pMethodSlot to a direct call to the pTarget instead.
+        PORTABILITY_ASSERT("ZapLazyHelperThunk::Save");
+#endif
+    }
+
+    if (!resolved && !pMethodSlot->IsUsed())
+    {
+        // This method slot is going to be used for indirect call.
+        // Record this so that later we will assign it an RVA.
+        pMethodSlot->SetIsUsed();
+    }
+}
+
 void ZapImage::OutputCode(CodeType codeType)
 {
     // Note there are three codeTypes: ProfiledHot, Unprofiled and ProfiledCold
@@ -227,12 +272,7 @@ void ZapImage::OutputCode(CodeType codeType)
                     }
                     break;
                 case ZapNodeType_MethodSlot:
-                    ((ZapMethodSlot *)pTarget)->SetIsUsed();
-                    //pTarget = m_pMethodSlots->CanDirectCall((ZapMethodSlot *)pTarget, pMethod);
-                    //if (pTarget != NULL)
-                    //{
-                        //pReloc->m_pTargetNode = pTarget;
-                    //}
+                    ResolveMethodSlotReloc((ZapMethodSlot *)pTarget, pMethod, pReloc, pCode);
                     break;
                 case ZapNodeType_Stub:
                     if (!pTarget->IsPlaced())
@@ -1041,12 +1081,6 @@ ZapNode * ZapMethodSlotTable::CanDirectCall(ZapMethodSlot * pMethodSlot, ZapMeth
     }
     else
     {
-        if (!pMethodSlot->IsUsed())
-        {
-            // This method slot is going to be used for indirect call.
-            // Record this so that later we will assign it an RVA.
-            pMethodSlot->SetIsUsed();
-        }
         return NULL;
     }
 }
