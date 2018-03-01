@@ -563,7 +563,7 @@ struct CORCOMPILE_CODE_MANAGER_ENTRY
         BYTE                callJmp[5];     // Call/Jmp Pc-Rel32
         BYTE                precodeType;    // 0x41 _PRECODE_EXTERNAL_METHOD_THUNK
         WORD                padding;
-        PCODE               m_pIndirectionCell;
+        DWORD               m_relptrIndirectionCell;  // Relative pointer to indirection cell
     };
 
 #elif defined(_TARGET_ARM_)

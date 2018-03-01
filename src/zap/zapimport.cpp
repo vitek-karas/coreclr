@@ -514,7 +514,7 @@ void ZapExternalMethodThunk::Save(ZapWriter * pZapWriter)
     thunk.callJmp[0]  = 0xE8;  // call rel32
     pImage->WriteReloc(&thunk, 1, helper, 0, IMAGE_REL_BASED_REL32);
     thunk.precodeType = _PRECODE_EXTERNAL_METHOD_THUNK;
-    pImage->WriteReloc(&thunk, offsetof(CORCOMPILE_EXTERNAL_METHOD_THUNK, m_pIndirectionCell), m_pIndirectionCell, 0, IMAGE_REL_BASED_PTR);
+    pImage->WriteReloc(&thunk, offsetof(CORCOMPILE_EXTERNAL_METHOD_THUNK, m_relptrIndirectionCell), m_pIndirectionCell, 0, IMAGE_REL_BASED_RELPTR);
 #elif defined(_TARGET_ARM_) 
     // Setup the call to ExternalMethodFixupStub
     //
