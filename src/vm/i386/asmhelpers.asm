@@ -1561,12 +1561,10 @@ _ExternalMethodFixupStub@0 proc public
 
     STUB_PROLOG
 
-    ; Use esi as a scratch register since we're going to overwrite it below anyway
     ; EAX is return address into CORCOMPILE_EXTERNAL_METHOD_THUNK. Compute the address of the m_relptrIndirectionCell
-    ; and load its value into EAX.
-    lea         esi, [eax + (ExternalMethodThunk__m_pIndirectionCell - ExternalMethodThunk__ReturnAddressOffset)]
-    mov         eax, [esi]
-    add         eax, esi
+    ; and then load its value as a relative pointer to eax.
+    lea         eax, [eax + (ExternalMethodThunk__m_relptrIndirectionCell - ExternalMethodThunk__ReturnAddressOffset)]
+    add         eax, [eax]
 
     mov         esi, esp
 

@@ -22,8 +22,11 @@ NESTED_ENTRY ExternalMethodFixupStub, _TEXT, ProcessCLRException
 
         lea             rcx, [rsp + __PWTB_TransitionBlock] ; pTransitionBlock
 
-        ; Load the address of the indirection cell from the thunk.
-        mov             rdx, [rdx + (ExternalMethodThunk__m_pIndirectionCell - ExternalMethodThunk__ReturnAddressOffset)] ; pThunk
+        ; Using r8 as a scratch register since we're going to overwrite it below anyway.
+        ; Load the address of the indirection cell from the thunk into rdx. It's a relative pointer.
+        lea             r8, [rdx + (ExternalMethodThunk__m_relptrIndirectionCell - ExternalMethodThunk__ReturnAddressOffset)]
+        movsxd          rdx, dword ptr [r8]
+        add             rdx, r8                             ; pThunk
         mov             r8, 0                               ; sectionIndex
         mov             r9, 0                               ; pModule
 
