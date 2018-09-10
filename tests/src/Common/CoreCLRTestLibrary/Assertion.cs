@@ -15,7 +15,7 @@ namespace TestLibrary
     /// unit tests. If the condition being tested is not met, an exception
     /// is thrown.
     /// </summary>
-    public static class Assert
+    public static partial class Assert
     {
         /// <summary>
         ///     Asserts that the given delegate throws an <see cref="ArgumentNullException"/> with the given parameter name.
