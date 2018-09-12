@@ -3,8 +3,8 @@
   <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), dir.props))\dir.props" />
   <Import Project="DependencyAssembly.props" />
   <PropertyGroup>
-    <ProjectGuid>{7F43EA6D-217A-474D-B981-FC8599BB2812}</ProjectGuid>
-    <DefineConstants>$(DefineConstants);DEPENDENCY_ASSEMBLY_V2_5</DefineConstants>
+    <ProjectGuid>{7F43EA6D-217A-474D-B981-FC8599BB28E2}</ProjectGuid>
+    <DefineConstants>$(DefineConstants);DEPENDENCY_ASSEMBLY_V3</DefineConstants>
   </PropertyGroup>
   <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildThisFileDirectory), dir.targets))\dir.targets" />
 </Project>

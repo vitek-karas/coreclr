@@ -1,11 +1,8 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.Loader;
-using System.Text;
-using System.Threading.Tasks;
 using CoreFXTestLibrary;
 
 namespace BindingFailures
@@ -28,24 +25,112 @@ namespace BindingFailures
 
         public void TestDirectLoadIntoDefaultALCByPath_WithLowerMajorVersion()
         {
-            // Make sure the assembly is loaded into default ALC (might be by previous tests).
             LoadIntoALCByPath(AssemblyLoadContext.Default, Path.Join(_binaryBasePath, @"DependencyAssembly_V2.5\DependencyAssembly.dll"));
 
             // Trying to load assembly with lower major version than what is already loaded should fail.
             Assert.Throws<FileLoadException>(() =>
-                LoadIntoALCByPath(AssemblyLoadContext.Default, Path.Join(_binaryBasePath, @"DependencyAssembly_V1\DependencyAssembly.dll")));
+                AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Join(_binaryBasePath, @"DependencyAssembly_V1\DependencyAssembly.dll")));
+        }
+
+        public void TestDirectLoadIntoDefaultALCByPath_WithHigherMajorVersion()
+        {
+            LoadIntoALCByPath(AssemblyLoadContext.Default, Path.Join(_binaryBasePath, @"DependencyAssembly_V2.5\DependencyAssembly.dll"));
+
+            // Trying to load assembly with higher major version than what is already loaded should fail.
+            Assert.Throws<FileLoadException>(() =>
+                AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Join(_binaryBasePath, @"DependencyAssembly_V3\DependencyAssembly.dll")));
+        }
+
+        public void TestDirectLoadIntoDefaultALCByName_WithLowerMajorVersion()
+        {
+            Assembly assembly = LoadIntoALCByPath(AssemblyLoadContext.Default, Path.Join(_binaryBasePath, @"DependencyAssembly_V2.5\DependencyAssembly.dll"));
+
+            // Trying to load assembly with lower major version than what is already loaded by name should work.
+            Assembly secondAssembly = AssemblyLoadContext.Default.LoadFromAssemblyName(new AssemblyName("DependencyAssembly, version=1.0.0.0"));
+
+            // The original 2.5 assembly should be returned.
+            Assert.AreSame(assembly, secondAssembly);
+        }
+
+        public void TestDirectLoadIntoDefaultALCByName_WithHigherMajorVersion()
+        {
+            Assembly assembly = LoadIntoALCByPath(AssemblyLoadContext.Default, Path.Join(_binaryBasePath, @"DependencyAssembly_V2.5\DependencyAssembly.dll"));
+
+            // Trying to load assembly with higher major version than what is already loaded by name should fail.
+            Assert.Throws<FileNotFoundException>(() =>
+                AssemblyLoadContext.Default.LoadFromAssemblyName(new AssemblyName("DependencyAssembly, version=3.0.0.0")));
         }
 
         public void TestDirectLoadIntoDefaultALCByPath_WithLowerMinorVersion()
         {
-            // Make sure the assembly is loaded into default ALC (might be by previous tests).
             LoadIntoALCByPath(AssemblyLoadContext.Default, Path.Join(_binaryBasePath, @"DependencyAssembly_V2.5\DependencyAssembly.dll"));
 
             // Trying to load assembly with lower minor version should still fail since LoadFromAssemblyPath will only succeed
             // if the exact same assembly has already been loaded.
             FileLoadException exception = Assert.Throws<FileLoadException>(() =>
-                LoadIntoALCByPath(AssemblyLoadContext.Default, Path.Join(_binaryBasePath, @"DependencyAssembly_V2\DependencyAssembly.dll")));
-            Assert.Contains(exception.Message, "foo");
+                AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Join(_binaryBasePath, @"DependencyAssembly_V2\DependencyAssembly.dll")));
+        }
+
+        public void TestDirectLoadIntoDefaultALCByPath_WithHigherMinorVersion()
+        {
+            LoadIntoALCByPath(AssemblyLoadContext.Default, Path.Join(_binaryBasePath, @"DependencyAssembly_V2.5\DependencyAssembly.dll"));
+
+            // Trying to load assembly with higher minor version should fail.
+            Assert.Throws<FileNotFoundException>(() =>
+                AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.Join(_binaryBasePath, @"DependencyAssembly_V2_7\DependencyAssembly.dll")));
+        }
+
+        public void TestDirectLoadIntoDefaultALCByName_WithLowerMinorVersion()
+        {
+            Assembly assembly = LoadIntoALCByPath(AssemblyLoadContext.Default, Path.Join(_binaryBasePath, @"DependencyAssembly_V2.5\DependencyAssembly.dll"));
+
+            // Trying to load assembly by name should work since it is of lower version than already loaded.
+            Assembly secondAssembly = AssemblyLoadContext.Default.LoadFromAssemblyName(new AssemblyName("DependencyAssembly, version=2.0.0.0"));
+
+            // The original 2.5 assembly should be returned.
+            Assert.AreSame(assembly, secondAssembly);
+        }
+
+        public void TestDirectLoadIntoDefaultALCByName_WithHigherMinorVersion()
+        {
+            Assembly assembly = LoadIntoALCByPath(AssemblyLoadContext.Default, Path.Join(_binaryBasePath, @"DependencyAssembly_V2.5\DependencyAssembly.dll"));
+
+            // Trying to load assembly by name should work since it is of lower version than already loaded.
+            Assert.Throws<FileNotFoundException>(() =>
+                AssemblyLoadContext.Default.LoadFromAssemblyName(new AssemblyName("DependencyAssembly, version=2.7.0.0")));
+        }
+
+        public class EmptyAssemblyLoadContext : AssemblyLoadContext
+        {
+            protected override Assembly Load(AssemblyName assemblyName)
+            {
+                return null;
+            }
+        }
+
+        public void TestResolveEventForHigherMinorVersionThanTPAOnCustomALC()
+        {
+            Assembly assembly = LoadIntoALCByPath(AssemblyLoadContext.Default, Path.Join(_binaryBasePath, @"DependencyAssembly_V2.5\DependencyAssembly.dll"));
+
+            AssemblyName targetAssemblyName = new AssemblyName("DependencyAssembly, version=2.7.0.0");
+
+            AssemblyLoadContext customALC = new EmptyAssemblyLoadContext();
+            customALC.Resolving += (AssemblyLoadContext alc, AssemblyName assemblyName) =>
+            {
+                if (assemblyName.Name == targetAssemblyName.Name && assemblyName.Version == targetAssemblyName.Version)
+                {
+                    using (Stream s = new FileStream(Path.Join(_binaryBasePath, @"DependencyAssembly_V2.7\DependencyAssembly.dll"), FileMode.Open))
+                    {
+                        return alc.LoadFromStream(s);
+                    }
+                }
+
+                return null;
+            };
+
+            Assembly targetAssembly = customALC.LoadFromAssemblyName(targetAssemblyName);
+            Assert.AreEqual(targetAssemblyName.Name, targetAssembly.GetName().Name);
+            Assert.AreEqual(targetAssemblyName.Version, targetAssembly.GetName().Version);
         }
 
         private string GetDescriptionFromDependencyAssembly(Assembly assembly)
@@ -68,15 +153,6 @@ namespace BindingFailures
             return alc.LoadFromAssemblyPath(assemblyPath);
         }
 
-        private int RunTests()
-        {
-            RunTest(TestDirectLoadIntoDefaultALCByPath);
-            RunTest(TestDirectLoadIntoDefaultALCByPath_WithLowerMajorVersion);
-            RunTest(TestDirectLoadIntoDefaultALCByPath_WithLowerMinorVersion);
-
-            return _retValue;
-        }
-
         public static int Main()
         {
             string testBasePath = Path.GetDirectoryName(typeof(BindingFailures).Assembly.Location);
@@ -84,13 +160,14 @@ namespace BindingFailures
             BindingFailures runner = new BindingFailures();
             runner._binaryBasePath = Path.GetDirectoryName(testBasePath);
 
-            return runner.RunTests();
+            runner.RunTests(runner);
+            return runner._retValue;
         }
 
         private int _retValue = 100;
-        private void RunTest(Action test)
+        private void RunTest(Action test, string testName = null)
         {
-            string testName = test.Method.Name;
+            testName = testName ?? test.Method.Name;
 
             try
             {
@@ -103,6 +180,16 @@ namespace BindingFailures
                 Console.WriteLine($"{testName} FAILED:");
                 Console.WriteLine(exe.ToString());
                 _retValue = -1;
+            }
+        }
+
+        private void RunTests(object testClass)
+        {
+            foreach (MethodInfo m in testClass.GetType()
+                .GetMethods(BindingFlags.Instance | BindingFlags.Public)
+                .Where(m => m.Name.StartsWith("Test") && m.GetParameters().Length == 0))
+            {
+                RunTest(() => m.Invoke(testClass, new object[0]), m.Name);
             }
         }
     }

@@ -6,6 +6,10 @@ using System.Reflection;
 [assembly: AssemblyVersion("2.0.0.0")]
 #elif DEPENDENCY_ASSEMBLY_V2_5
 [assembly: AssemblyVersion("2.5.0.0")]
+#elif DEPENDENCY_ASSEMBLY_V2_7
+[assembly: AssemblyVersion("2.7.0.0")]
+#elif DEPENDENCY_ASSEMBLY_V3
+[assembly: AssemblyVersion("3.0.0.0")]
 #endif
 
 public class DependencyClass
