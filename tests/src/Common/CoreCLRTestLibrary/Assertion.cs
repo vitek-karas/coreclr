@@ -32,7 +32,7 @@ namespace TestLibrary
         /// <returns>
         ///     The thrown <see cref="ArgumentNullException"/>.
         /// </returns>
-        /// <exception cref="AssertFailedException">
+        /// <exception cref="AssertTestException">
         ///     <see cref="Exception"/> of type <see cref="ArgumentNullException"/> was not thrown.
         ///     <para>
         ///         -or-
@@ -59,7 +59,7 @@ namespace TestLibrary
         /// <returns>
         ///     The thrown <see cref="ArgumentException"/>.
         /// </returns>
-        /// <exception cref="AssertFailedException">
+        /// <exception cref="AssertTestException">
         ///     <see cref="Exception"/> of type <see cref="ArgumentException"/> was not thrown.
         ///     <para>
         ///         -or-
@@ -86,7 +86,7 @@ namespace TestLibrary
         /// <returns>
         ///     The thrown <see cref="Exception"/>.
         /// </returns>
-        /// <exception cref="AssertFailedException">
+        /// <exception cref="AssertTestException">
         ///     <see cref="Exception"/> of type <typeparam name="T"/> was not thrown.
         ///     <para>
         ///         -or-
@@ -119,7 +119,7 @@ namespace TestLibrary
         /// <returns>
         ///     The base <see cref="Exception"/> of the <see cref="AggregateException"/>.
         /// </returns>
-        /// <exception cref="AssertFailedException">
+        /// <exception cref="AssertTestException">
         ///     <see cref="AggregateException"/> of was not thrown.
         ///         -or-
         ///     </para>
@@ -154,7 +154,7 @@ namespace TestLibrary
         /// <returns>
         ///     The thrown <see cref="Exception"/>.
         /// </returns>
-        /// <exception cref="AssertFailedException">
+        /// <exception cref="AssertTestException">
         ///     <see cref="Exception"/> of type <typeparam name="T"/> was not thrown.
         /// </exception>
         public static T Throws<T>(Action action, string format, params Object[] args) where T : Exception
@@ -177,7 +177,7 @@ namespace TestLibrary
         /// <returns>
         ///     The thrown <see cref="Exception"/>.
         /// </returns>
-        /// <exception cref="AssertFailedException">
+        /// <exception cref="AssertTestException">
         ///     <see cref="Exception"/> of type <typeparam name="T"/> was not thrown.
         /// </exception>
         public static T Throws<T>(Action action, string message = "", AssertThrowsOptions options = AssertThrowsOptions.None) where T : Exception
@@ -682,6 +682,21 @@ namespace TestLibrary
             if (Object.ReferenceEquals(notExpected, actual))
             {
                 Assert.HandleFail("Assert.AreNotSame", message);
+            }
+        }
+
+        /// <summary>
+        /// Tests if the specified string contains a specified substring.
+        /// </summary>
+        /// <param name="value">The string to test.</param>
+        /// <param name="substring">The substring to look for.</param>
+        /// <param name="message">Optional message to include in the exception in case of failure.</param>
+        /// <exception cref="AssertFailedException">Throws if <paramref name="value"/> doesn't contain <paramref name="substring"/>.</exception>
+        public static void Contains(string value, string substring, string message = "")
+        {
+            if (!value.Contains(substring))
+            {
+                Assert.HandleFail("Assert.Contains", $"Value '{value}' is expected to contain substring '{substring}'. {message}");
             }
         }
 
