@@ -133,6 +133,23 @@ namespace BindingFailures
             Assert.AreEqual(targetAssemblyName.Version, targetAssembly.GetName().Version);
         }
 
+        public void TestAssemblyLoadWithNullAssemblyName_ShouldFail()
+        {
+            Assert.Throws<ArgumentNullException>(() => Assembly.Load((AssemblyName)null));
+        }
+
+        public void TestAssemblyLoadWithEmptyAssemblyName_ShouldFail()
+        {
+            AssemblyName assemblyName = new AssemblyName
+            {
+                // Setting these explicitly to make it clear what we're testing
+                Name = null,
+                CodeBase = null
+            };
+
+            Assert.Throws<ArgumentException>(() => Assembly.Load(assemblyName));
+        }
+
         private string GetDescriptionFromDependencyAssembly(Assembly assembly)
         {
             object dependencyInstance = assembly.CreateInstance("DependencyClass");
