@@ -103,7 +103,7 @@ namespace ComponentDependencyResolverTests
 
         public void TestNameWithPrefixAndNoPrefixAndNoSuffix()
         {
-            ValidateNativeLibraryResolutions("{0}", "lib{0}", OS.OSX | OS.Linux);
+            ValidateNativeLibraryResolutions("{0}", "lib{0}", 0);
         }
 
         public void TestNameWithPrefixAndPrefixAndNoSuffix()
