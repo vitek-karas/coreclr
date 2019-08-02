@@ -19,6 +19,21 @@
 #include "../../vm/gdbjithelpers.h"
 #endif // FEATURE_GDBJIT
 
+namespace
+{
+    void TraceTimeStamp(const char* marker)
+    {
+        LARGE_INTEGER licount;
+        LARGE_INTEGER lifreq;
+        long long den = 1000000000;
+        QueryPerformanceCounter(&licount);
+        QueryPerformanceFrequency(&lifreq);
+        long long l = (licount.QuadPart / lifreq.QuadPart) * den;
+        l += (licount.QuadPart % lifreq.QuadPart) * den / lifreq.QuadPart;
+        printf("coreclr %s %llu\n", marker, l);
+    }
+}
+
 typedef int (STDMETHODCALLTYPE *HostMain)(
     const int argc,
     const wchar_t** argv
@@ -184,6 +199,8 @@ int coreclr_initialize(
     }
 #endif
 
+    TraceTimeStamp("coreclr_initialize-begin");
+
     ReleaseHolder<ICLRRuntimeHost4> host;
 
     hr = CorHost2::CreateObject(IID_ICLRRuntimeHost4, (void**)&host);
@@ -267,6 +284,9 @@ int coreclr_initialize(
 
 #endif
     }
+
+    TraceTimeStamp("coreclr_initialize-end");
+
     return hr;
 }
 
@@ -402,6 +422,8 @@ int coreclr_execute_assembly(
     }
     *exitCode = -1;
 
+    TraceTimeStamp("coreclr_execute_assembly-begin");
+
     ICLRRuntimeHost4* host = reinterpret_cast<ICLRRuntimeHost4*>(hostHandle);
 
     ConstWStringArrayHolder argvW;
@@ -411,6 +433,8 @@ int coreclr_execute_assembly(
 
     HRESULT hr = host->ExecuteAssembly(domainId, managedAssemblyPathW, argc, argvW, (DWORD *)exitCode);
     IfFailRet(hr);
+
+    TraceTimeStamp("coreclr_execute_assembly-end");
 
     return hr;
 }
