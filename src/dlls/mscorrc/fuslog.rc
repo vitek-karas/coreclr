@@ -18,7 +18,6 @@ BEGIN
     ID_FUSLOG_ASSEMBLY_STATUS_BOUND_TO_LOCATION      L"LOG: Assembly is picked up from %s."
     ID_FUSLOG_ASSEMBLY_STATUS_BOUND_GAC              L"LOG: Assembly is picked up from GAC."
     ID_FUSLOG_ASSEMBLY_STATUS_BOUND_HAS              L"LOG: Assembly is picked up from HAS."
-    ID_FUSLOG_ASSEMBLY_STATUS_BOUND_BYTE_ARRAY       L"LOG: Assembly is picked up from byte array."
 
     ID_FUSLOG_BINDING_PRE_BIND_STATE_BEGIN           L"=== Pre-bind state information ==="
     ID_FUSLOG_BINDING_PRE_BIND_STATE_BY_NAME         L"LOG: By-name Bind. Display name = %s"

@@ -117,23 +117,6 @@ void Assembly::SetIsDynamicBind(BOOL fIsDynamicBind)
     }
 }
 
-BOOL Assembly::GetIsByteArray()
-{
-    return ((m_dwAssemblyFlags & FLAG_IS_BYTE_ARRAY) != 0);
-}
-
-void Assembly::SetIsByteArray(BOOL fIsByteArray)
-{
-    if (fIsByteArray)
-    {
-        m_dwAssemblyFlags |= FLAG_IS_BYTE_ARRAY;
-    }
-    else
-    {
-        m_dwAssemblyFlags &= ~FLAG_IS_BYTE_ARRAY;
-    }
-}
-
 BOOL Assembly::GetIsSharable()
 {
     return ((m_dwAssemblyFlags & FLAG_IS_SHARABLE) != 0);

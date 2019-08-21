@@ -44,10 +44,6 @@ public:
                                          SString           &sCultureName,
                                          ICLRPrivAssembly **ppSystemAssembly);
                                          
-    static HRESULT GetAssemblyFromImage(PEImage   *pPEImage,
-                                        PEImage   *pNativePEImage,
-                                        ICLRPrivAssembly **ppAssembly);
-
     static HRESULT GetAssembly(/* in */  SString     &assemblyPath,
                                /* in */  BOOL         fIsInGAC,
                                /* in */  BOOL         fExplicitBindToNativeImage,

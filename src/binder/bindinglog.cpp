@@ -190,12 +190,6 @@ namespace BINDER_SPACE
                        LoadResourceAndReturnHR(CCompRC::Debugging,
                                                ID_FUSLOG_ASSEMBLY_STATUS_BOUND_GAC));
         }
-        else if (pAssembly->GetIsByteArray())
-        {
-            IF_FAIL_GO(info.
-                       LoadResourceAndReturnHR(CCompRC::Debugging,
-                                               ID_FUSLOG_ASSEMBLY_STATUS_BOUND_BYTE_ARRAY));
-        }
         else
         {
             PathString assemblyPath;
