@@ -123,5 +123,8 @@ namespace System.Reflection
 
         [MethodImpl(MethodImplOptions.InternalCall)]
         internal static extern uint GetAssemblyCount();
+
+        [DllImport(JitHelpers.QCall, CharSet = CharSet.Unicode)]
+        private static extern void FireLoadFileContextCreated(int n);
     }
 }

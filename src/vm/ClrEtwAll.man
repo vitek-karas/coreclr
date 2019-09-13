@@ -242,6 +242,7 @@
                             <opcode name="AssemblyUnload" message="$(string.RuntimePublisher.AssemblyUnloadOpcodeMessage)" symbol="CLR_ASSEMBLYUNLOAD_OPCODE" value="38"> </opcode>
                             <opcode name="AppDomainLoad" message="$(string.RuntimePublisher.AppDomainLoadOpcodeMessage)" symbol="CLR_APPDOMAINLOAD_OPCODE" value="41"> </opcode>
                             <opcode name="AppDomainUnload" message="$(string.RuntimePublisher.AppDomainUnloadOpcodeMessage)" symbol="CLR_APPDOMAINUNLOAD_OPCODE" value="42"> </opcode>
+                            <opcode name="FallbackToDefaultALC" message="$(string.RuntimePublisher.FallbackToDefaultALCOpcodeMessage)" symbol="CLR_FALLBACKTODEFAULTALC_OPCODE" value="43"> </opcode>
                         </opcodes>
                     </task>
 
@@ -1621,6 +1622,16 @@
                                 <AppDomainIndex> %4 </AppDomainIndex>
                                 <ClrInstanceID> %5 </ClrInstanceID>
                             </AppDomainLoadUnload_V1>
+                        </UserData>
+                    </template>
+
+                    <template tid="FallbackToDefaultALC">
+                        <data name="ClrInstanceID" inType="win:UInt16" />
+
+                        <UserData>
+                            <FallbackToDefaultALC xmlns="myNs">
+                                <ClrInstanceID> %1 </ClrInstanceID>
+                            </FallbackToDefaultALC>
                         </UserData>
                     </template>
 
@@ -3280,6 +3291,11 @@
                            keywords ="PerfTrackKeyword" opcode="ModuleRangeLoad"
                            task="CLRPerfTrack"
                            symbol="ModuleRangeLoad" message="$(string.RuntimePublisher.ModuleRangeLoadEventMessage)"/>
+
+                    <event value="300" version="0" level="win:Informational"  template="FallbackToDefaultALC"
+                           keywords ="LoaderKeyword" opcode="FallbackToDefaultALC"
+                           task="CLRLoader"
+                           symbol="FallbackToDefaultALC" message="$(string.RuntimePublisher.FallbackToDefaultALCEventMessage)"/>
 
                     <!-- CLR Security events -->
                     <event value="181" version="0" level="win:Verbose"  template="StrongNameVerification"
@@ -6597,6 +6613,7 @@
                 <string id="RuntimePublisher.AppDomainLoad_V1EventMessage" value="AppDomainID=%1;%nAppDomainFlags=%2;%nAppDomainName=%3;%nAppDomainIndex=%4;%nClrInstanceID=%5" />
                 <string id="RuntimePublisher.AppDomainUnloadEventMessage" value="AppDomainID=%1;%nAppDomainFlags=%2;%nAppDomainName=%3" />
                 <string id="RuntimePublisher.AppDomainUnload_V1EventMessage" value="AppDomainID=%1;%nAppDomainFlags=%2;%nAppDomainName=%3;%nAppDomainIndex=%4;%nClrInstanceID=%5" />
+                <string id="RuntimePublisher.FallbackToDefaultALCEventMessage" value="nClrInstanceID=%1" />
                 <string id="RuntimePublisher.StackEventMessage" value="ClrInstanceID=%1;%nReserved1=%2;%nReserved2=%3;%nFrameCount=%4;%nStack=%5" />
                 <string id="RuntimePublisher.AppDomainMemAllocatedEventMessage" value="AppDomainID=%1;%nAllocated=%2;%nClrInstanceID=%3" />
                 <string id="RuntimePublisher.AppDomainMemSurvivedEventMessage" value="AppDomainID=%1;%nSurvived=%2;%nProcessSurvived=%3;%nClrInstanceID=%4" />
@@ -7178,6 +7195,7 @@
                 <string id="RuntimePublisher.AssemblyUnloadOpcodeMessage" value="AssemblyUnload" />
                 <string id="RuntimePublisher.AppDomainLoadOpcodeMessage" value="AppDomainLoad" />
                 <string id="RuntimePublisher.AppDomainUnloadOpcodeMessage" value="AppDomainUnload" />
+                <string id="RuntimePublisher.FallbackToDefaultALCOpcodeMessage" value="FallbackToDefaultALC" />
                 <string id="RuntimePublisher.CLRStackWalkOpcodeMessage" value="Walk" />
                 <string id="RuntimePublisher.AppDomainMemAllocatedOpcodeMessage" value="MemAllocated" />
                 <string id="RuntimePublisher.AppDomainMemSurvivedOpcodeMessage" value="MemSurvived" />

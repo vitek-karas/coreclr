@@ -10,6 +10,7 @@ using System.Runtime.Serialization;
 using System.Security;
 using System.Runtime.CompilerServices;
 using System.Runtime.Loader;
+using System.Diagnostics.Tracing;
 
 namespace System.Reflection
 {
@@ -238,6 +239,7 @@ namespace System.Reflection
                 if (s_loadfile.TryGetValue(normalizedPath, out result))
                     return result;
 
+                FireLoadFileContextCreated(42);
                 AssemblyLoadContext alc = new IndividualAssemblyLoadContext(string.Format("Assembly.LoadFile({0})", normalizedPath));
                 result = alc.LoadFromAssemblyPath(normalizedPath);
                 s_loadfile.Add(normalizedPath, result);

@@ -39,6 +39,8 @@ public:
                                                                 CLR_BOOL fThrowOnFileNotFound,
                                                                 AssemblyLoadContextBaseObject *assemblyLoadContextUNSAFE);
 
+    static void QCALLTYPE FireLoadFileContextCreated(int n);
+
     //
     // instance FCALLs
     //
