@@ -1507,6 +1507,50 @@ HRESULT AssemblyBinder::BindUsingHostAssemblyResolver(/* in */ INT_PTR pManagedA
 }
 
 /* static */
+HRESULT AssemblyBinder::PrepareBindUsingPEImage(/* in */ PEImage * pPEImage, 
+                                                /* in */ BOOL fIsNativeImage,
+                                                /* [out] */ BINDER_SPACE::AssemblyName** ppAssemblyName,
+                                                /* [out] */ IMDInternalImport **ppIMetaDataAssemblyImport,
+                                                /* [out] */ PEKIND *pPeKind)
+{
+    HRESULT hr = S_OK;
+
+    ReleaseHolder<BINDER_SPACE::AssemblyName> pAssemblyName;
+    ReleaseHolder<IMDInternalImport> pIMetaDataAssemblyImport;
+
+    *pPeKind = peNone;
+
+    // Get the Metadata interface
+    DWORD dwPAFlags[2];
+    IF_FAIL_GO(BinderAcquireImport(pPEImage, &pIMetaDataAssemblyImport, dwPAFlags, fIsNativeImage));
+    IF_FAIL_GO(TranslatePEToArchitectureType(dwPAFlags, pPeKind));
+
+    _ASSERTE(pIMetaDataAssemblyImport != NULL);
+
+    // Using the information we just got, initialize the assemblyname
+    SAFE_NEW(pAssemblyName, AssemblyName);
+    IF_FAIL_GO(pAssemblyName->Init(pIMetaDataAssemblyImport, *pPeKind));
+
+    // Validate architecture
+    if (!BINDER_SPACE::Assembly::IsValidArchitecture(pAssemblyName->GetArchitecture()))
+    {
+        IF_FAIL_GO(HRESULT_FROM_WIN32(ERROR_BAD_FORMAT));
+    }
+
+    // Disallow attempt to bind to the core library.
+    if (pAssemblyName->IsMscorlib())
+    {
+        IF_FAIL_GO(HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND));
+    }
+
+    *ppAssemblyName = pAssemblyName.Extract();
+    *ppIMetaDataAssemblyImport = pIMetaDataAssemblyImport.Extract();
+
+Exit:
+    return hr;
+}
+
+/* static */
 HRESULT AssemblyBinder::BindUsingPEImage(/* in */  ApplicationContext *pApplicationContext,
                                          /* in */  BINDER_SPACE::AssemblyName *pAssemblyName,
                                          /* in */  PEImage            *pPEImage,

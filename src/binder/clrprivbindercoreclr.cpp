@@ -107,9 +107,9 @@ Exit:;
 }
 
 #if !defined(DACCESS_COMPILE) && !defined(CROSSGEN_COMPILE)
-HRESULT CLRPrivBinderCoreCLR::BindUsingPEImage( /* in */ PEImage *pPEImage, 
-                                                /* in */ BOOL fIsNativeImage, 
-                                                /* [retval][out] */ ICLRPrivAssembly **ppAssembly)
+HRESULT CLRPrivBinderCoreCLR::BindUsingPEImage(/* in */ PEImage *pPEImage, 
+                                               /* in */ BOOL fIsNativeImage, 
+                                               /* [retval][out] */ ICLRPrivAssembly **ppAssembly)
 {
     HRESULT hr = S_OK;
 
@@ -121,31 +121,28 @@ HRESULT CLRPrivBinderCoreCLR::BindUsingPEImage( /* in */ PEImage *pPEImage,
         
         PEKIND PeKind = peNone;
         
-        // Get the Metadata interface
-        DWORD dwPAFlags[2];
-        IF_FAIL_GO(BinderAcquireImport(pPEImage, &pIMetaDataAssemblyImport, dwPAFlags, fIsNativeImage));
-        IF_FAIL_GO(AssemblyBinder::TranslatePEToArchitectureType(dwPAFlags, &PeKind));
-        
-        _ASSERTE(pIMetaDataAssemblyImport != NULL);
-        
-        // Using the information we just got, initialize the assemblyname
-        SAFE_NEW(pAssemblyName, AssemblyName);
-        IF_FAIL_GO(pAssemblyName->Init(pIMetaDataAssemblyImport, PeKind));
-        
-        // Validate architecture
-        if (!BINDER_SPACE::Assembly::IsValidArchitecture(pAssemblyName->GetArchitecture()))
-        {
-            IF_FAIL_GO(HRESULT_FROM_WIN32(ERROR_BAD_FORMAT));
-        }
-        
-        // Easy out for mscorlib
-        if (pAssemblyName->IsMscorlib())
-        {
-            IF_FAIL_GO(HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND));
-        }
+        IF_FAIL_GO(AssemblyBinder::PrepareBindUsingPEImage(pPEImage, fIsNativeImage, &pAssemblyName, &pIMetaDataAssemblyImport, &PeKind));
 
         {
             // Ensure we are not being asked to bind to a TPA assembly
+            //
+            // This effectively implements a relaxed behavior for assemblies from TPA
+            // Other assemblies have a very strict behavior that LoadFromAssemblyPath will only succeed if:
+            //   - The assembly doesn't exist in the context yet
+            //   - Or if it does exist, it has the exact same MVID (basically must be the exact same build - same file)
+            //     in this case it returns the already loaded assembly.
+            // This code below relaxes this behavior for assemblies in TPA where calling LoadFromAssemblyPath
+            // on an assembly which already exists in the TPA will allow to load any assembly with lower or same version
+            // in which case it returns the already loaded assembly. So the difference is that it allows:
+            //   - Loading of assembly of the same version but different build (different MVID)
+            //   - Loading of assembly of a lower version
+            //
+            // Not 100% this was intentional, but it has a relatively nice side effect where:
+            //   - App uses some assembly System.Feature.dll from NuGet, but loads it dynamically into Default context.
+            //   - In later version we now include System.Feature.dll (higher or same version) in the framework itself.
+            //   - After the upgrade the app automatically gets the framework version of the assembly (from TPA).
+            // This matches the host behavior if the app include the System.Featire.dll in its deps.json (the one from
+            // framework will be used if equal or higher).
             //
             SString& simpleName = pAssemblyName->GetSimpleName();
             SimpleNameToFileNameMap* tpaMap = GetAppContext()->GetTpaList();

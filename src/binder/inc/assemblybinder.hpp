@@ -70,7 +70,13 @@ namespace BINDER_SPACE
                                                       /* in */ IAssemblyName      *pIAssemblyName,
                                                       /* in */ CLRPrivBinderCoreCLR *pTPABinder,
                                                       /* out */ Assembly           **ppAssembly);
-                                                      
+
+        static HRESULT PrepareBindUsingPEImage(/* in */ PEImage* pPEImage,
+                                               /* in */ BOOL fIsNativeImage,
+                                               /* [out] */ BINDER_SPACE::AssemblyName** ppAssemblyName,
+                                               /* [out] */ IMDInternalImport** ppIMetaDataAssemblyImport,
+                                               /* [out] */ PEKIND* pPeKind);
+
         static HRESULT BindUsingPEImage(/* in */  ApplicationContext *pApplicationContext,
                                         /* in */  BINDER_SPACE::AssemblyName *pAssemblyName,
                                         /* in */  PEImage            *pPEImage,

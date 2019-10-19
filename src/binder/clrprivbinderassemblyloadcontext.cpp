@@ -126,29 +126,7 @@ HRESULT CLRPrivBinderAssemblyLoadContext::BindUsingPEImage( /* in */ PEImage *pP
         
         PEKIND PeKind = peNone;
         
-        // Get the Metadata interface
-        DWORD dwPAFlags[2];
-        IF_FAIL_GO(BinderAcquireImport(pPEImage, &pIMetaDataAssemblyImport, dwPAFlags, fIsNativeImage));
-        IF_FAIL_GO(AssemblyBinder::TranslatePEToArchitectureType(dwPAFlags, &PeKind));
-        
-        _ASSERTE(pIMetaDataAssemblyImport != NULL);
-        
-        // Using the information we just got, initialize the assemblyname
-        SAFE_NEW(pAssemblyName, AssemblyName);
-        IF_FAIL_GO(pAssemblyName->Init(pIMetaDataAssemblyImport, PeKind));
-        
-        // Validate architecture
-        if (!BINDER_SPACE::Assembly::IsValidArchitecture(pAssemblyName->GetArchitecture()))
-        {
-            IF_FAIL_GO(HRESULT_FROM_WIN32(ERROR_BAD_FORMAT));
-        }
-        
-        // Disallow attempt to bind to the core library. Aside from that,
-        // the LoadContext can load any assembly (even if it was in a different LoadContext like TPA).
-        if (pAssemblyName->IsMscorlib())
-        {
-            IF_FAIL_GO(HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND));
-        }
+        IF_FAIL_GO(AssemblyBinder::PrepareBindUsingPEImage(pPEImage, fIsNativeImage, &pAssemblyName, &pIMetaDataAssemblyImport, &PeKind));
 
         hr = AssemblyBinder::BindUsingPEImage(&m_appContext, pAssemblyName, pPEImage, PeKind, pIMetaDataAssemblyImport, &pCoreCLRFoundAssembly);
         if (hr == S_OK)
