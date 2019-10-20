@@ -112,9 +112,9 @@ Exit:;
     return hr;
 }
 
-HRESULT CLRPrivBinderAssemblyLoadContext::BindUsingPEImage( /* in */ PEImage *pPEImage, 
-                                                            /* in */ BOOL fIsNativeImage, 
-                                                            /* [retval][out] */ ICLRPrivAssembly **ppAssembly)
+HRESULT CLRPrivBinderAssemblyLoadContext::BindUsingPEImage(/* in */ PEImage *pPEImage, 
+                                                           /* in */ BOOL fIsNativeImage, 
+                                                           /* [retval][out] */ ICLRPrivAssembly **ppAssembly)
 {
     HRESULT hr = S_OK;
 
@@ -169,11 +169,11 @@ HRESULT CLRPrivBinderAssemblyLoadContext::GetLoaderAllocator(LPVOID* pLoaderAllo
 //=============================================================================
 /* static */
 HRESULT CLRPrivBinderAssemblyLoadContext::SetupContext(DWORD      dwAppDomainId,
-                                            CLRPrivBinderCoreCLR *pTPABinder,
-                                            LoaderAllocator* pLoaderAllocator,
-                                            void* loaderAllocatorHandle,
-                                            UINT_PTR ptrAssemblyLoadContext,
-                                            CLRPrivBinderAssemblyLoadContext **ppBindContext)
+                                                       CLRPrivBinderCoreCLR *pTPABinder,
+                                                       LoaderAllocator* pLoaderAllocator,
+                                                       void* loaderAllocatorHandle,
+                                                       UINT_PTR ptrAssemblyLoadContext,
+                                                       CLRPrivBinderAssemblyLoadContext **ppBindContext)
 {
     HRESULT hr = E_FAIL;
     EX_TRY
