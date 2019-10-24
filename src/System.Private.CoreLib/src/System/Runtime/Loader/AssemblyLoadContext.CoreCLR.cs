@@ -17,7 +17,7 @@ namespace System.Runtime.Loader
         private static extern void PrepareForAssemblyLoadContextRelease(IntPtr ptrNativeAssemblyLoadContext, IntPtr ptrAssemblyLoadContextStrong);
 
         [DllImport(JitHelpers.QCall, CharSet = CharSet.Unicode)]
-        private static extern IntPtr LoadFromStream(IntPtr ptrNativeAssemblyLoadContext, IntPtr ptrAssemblyArray, int iAssemblyArrayLen, IntPtr ptrSymbols, int iSymbolArrayLen, ObjectHandleOnStack retAssembly);
+        private static extern void LoadFromStream(IntPtr ptrNativeAssemblyLoadContext, IntPtr ptrAssemblyArray, int iAssemblyArrayLen, IntPtr ptrSymbols, int iSymbolArrayLen, ObjectHandleOnStack retAssembly);
 
         [DllImport(JitHelpers.QCall, CharSet = CharSet.Unicode)]
         internal static extern void InternalSetProfileRoot(string directoryPath);
@@ -27,6 +27,9 @@ namespace System.Runtime.Loader
 
         [DllImport(JitHelpers.QCall, CharSet = CharSet.Unicode)]
         private static extern void LoadFromPath(IntPtr ptrNativeAssemblyLoadContext, string? ilPath, string? niPath, ObjectHandleOnStack retAssembly);
+
+        [DllImport(JitHelpers.QCall, CharSet = CharSet.Unicode)]
+        private static extern bool BindUsingDefaultContext(IntPtr defaultBindContext);
 
         [MethodImpl(MethodImplOptions.InternalCall)]
         internal static extern Assembly[] GetLoadedAssemblies();

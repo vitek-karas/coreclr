@@ -6451,8 +6451,40 @@ AppDomain::AssemblyIterator::Next_Unlocked(
 
 #if !defined(DACCESS_COMPILE) && !defined(CROSSGEN_COMPILE)
 
+struct DefaultBindContext
+{
+    CLRPrivBinderCoreCLR* _pTPABinder;
+    IAssemblyName* _pIAssemblyName;
+    ICLRPrivAssembly* _pCoreCLRFoundAssembly;
+};
+
+BOOL QCALLTYPE AppDomain::BindUsingDefaultContext(INT_PTR pDefaultBindContext)
+{
+    QCALL_CONTRACT;
+
+    BOOL retValue;
+
+    BEGIN_QCALL;
+
+    DefaultBindContext* pContext = (DefaultBindContext*)pDefaultBindContext;
+
+    // If we could not resolve the assembly using Load method, then attempt fallback with TPA Binder.
+    // Since TPA binder cannot fallback to itself, this fallback does not happen for binds within TPA binder.
+    IfFailThrow(pContext->_pTPABinder->BindAssemblyByName(pContext->_pIAssemblyName, &pContext->_pCoreCLRFoundAssembly));
+    retValue = pContext->_pCoreCLRFoundAssembly != NULL;
+
+    END_QCALL;
+
+    return retValue;
+}
+
 // Returns S_OK if the assembly was successfully loaded
-HRESULT RuntimeInvokeHostAssemblyResolver(INT_PTR pManagedAssemblyLoadContextToBindWithin, IAssemblyName *pIAssemblyName, CLRPrivBinderCoreCLR *pTPABinder, BINDER_SPACE::AssemblyName *pAssemblyName, ICLRPrivAssembly **ppLoadedAssembly)
+HRESULT RuntimeInvokeHostAssemblyResolver(
+    INT_PTR pManagedAssemblyLoadContextToBindWithin,
+    IAssemblyName *pIAssemblyName,
+    CLRPrivBinderCoreCLR *pTPABinder,
+    BINDER_SPACE::AssemblyName *pAssemblyName,
+    ICLRPrivAssembly **ppLoadedAssembly)
 {
     CONTRACTL
     {
@@ -6477,6 +6509,11 @@ HRESULT RuntimeInvokeHostAssemblyResolver(INT_PTR pManagedAssemblyLoadContextToB
     ZeroMemory(&_gcRefs, sizeof(_gcRefs));
         
     GCPROTECT_BEGIN(_gcRefs);
+
+    DefaultBindContext defaultBindContext;
+    defaultBindContext._pTPABinder = pTPABinder;
+    defaultBindContext._pIAssemblyName = pIAssemblyName;
+    defaultBindContext._pCoreCLRFoundAssembly = NULL;
         
     ICLRPrivAssembly *pResolvedAssembly = NULL;
         
@@ -6507,10 +6544,11 @@ HRESULT RuntimeInvokeHostAssemblyResolver(INT_PTR pManagedAssemblyLoadContextToB
             MethodDescCallSite methLoadAssembly(METHOD__ASSEMBLYLOADCONTEXT__RESOLVE);
                 
             // Setup the arguments for the call
-            ARG_SLOT args[2] =
+            ARG_SLOT args[3] =
             {
                 PtrToArgSlot(pManagedAssemblyLoadContextToBindWithin), // IntPtr for managed assembly load context instance
                 ObjToArgSlot(_gcRefs.oRefAssemblyName), // AssemblyName instance
+                PtrToArgSlot(&defaultBindContext) // IntPtr for the default binding context
             };
 
             // Make the call
@@ -6519,74 +6557,78 @@ HRESULT RuntimeInvokeHostAssemblyResolver(INT_PTR pManagedAssemblyLoadContextToB
             {
                 fResolvedAssembly = true;
             }
-
-            // Step 3 (of CLRPrivBinderAssemblyLoadContext::BindUsingAssemblyName)
-            if (!fResolvedAssembly && !isSatelliteAssemblyRequest)
+            else if (defaultBindContext._pCoreCLRFoundAssembly != NULL)
             {
-                // If we could not resolve the assembly using Load method, then attempt fallback with TPA Binder.
-                // Since TPA binder cannot fallback to itself, this fallback does not happen for binds within TPA binder.
-                //
-                // Switch to pre-emp mode before calling into the binder
-                GCX_PREEMP();
-                ICLRPrivAssembly *pCoreCLRFoundAssembly = NULL;
-                hr = pTPABinder->BindAssemblyByName(pIAssemblyName, &pCoreCLRFoundAssembly);
-                if (SUCCEEDED(hr))
-                {
-                    _ASSERTE(pCoreCLRFoundAssembly != NULL);
-                    pResolvedAssembly = pCoreCLRFoundAssembly;
-                    fResolvedAssembly = true;
-                }
-            }
-        }
-
-        if (!fResolvedAssembly && isSatelliteAssemblyRequest)
-        {
-            // Step 4 (of CLRPrivBinderAssemblyLoadContext::BindUsingAssemblyName)
-            //
-            // Attempt to resolve it using the ResolveSatelliteAssembly method.
-            // Finally, setup arguments for invocation
-            MethodDescCallSite methResolveSatelitteAssembly(METHOD__ASSEMBLYLOADCONTEXT__RESOLVESATELLITEASSEMBLY);
-
-            // Setup the arguments for the call
-            ARG_SLOT args[2] =
-            {
-                PtrToArgSlot(pManagedAssemblyLoadContextToBindWithin), // IntPtr for managed assembly load context instance
-                ObjToArgSlot(_gcRefs.oRefAssemblyName), // AssemblyName instance
-            };
-
-            // Make the call
-            _gcRefs.oRefLoadedAssembly = (ASSEMBLYREF) methResolveSatelitteAssembly.Call_RetOBJECTREF(args);
-            if (_gcRefs.oRefLoadedAssembly != NULL)
-            {
-                // Set the flag indicating we found the assembly
+                pResolvedAssembly = defaultBindContext._pCoreCLRFoundAssembly;
                 fResolvedAssembly = true;
             }
+
+            //// Step 3 (of CLRPrivBinderAssemblyLoadContext::BindUsingAssemblyName)
+            //if (!fResolvedAssembly && !isSatelliteAssemblyRequest)
+            //{
+            //    // If we could not resolve the assembly using Load method, then attempt fallback with TPA Binder.
+            //    // Since TPA binder cannot fallback to itself, this fallback does not happen for binds within TPA binder.
+            //    //
+            //    // Switch to pre-emp mode before calling into the binder
+            //    GCX_PREEMP();
+            //    hr = defaultBindContext._pTPABinder->BindAssemblyByName(defaultBindContext._pIAssemblyName, &defaultBindContext._pCoreCLRFoundAssembly);
+            //    if (SUCCEEDED(hr))
+            //    {
+            //        _ASSERTE(defaultBindContext._pCoreCLRFoundAssembly != NULL);
+            //        pResolvedAssembly = defaultBindContext._pCoreCLRFoundAssembly;
+            //        fResolvedAssembly = true;
+            //    }
+            //}
         }
 
-        if (!fResolvedAssembly)
-        {
-            // Step 5 (of CLRPrivBinderAssemblyLoadContext::BindUsingAssemblyName)
-            //
-            // If we couldn't resolve the assembly using TPA LoadContext as well, then
-            // attempt to resolve it using the Resolving event.
-            // Finally, setup arguments for invocation
-            MethodDescCallSite methResolveUsingEvent(METHOD__ASSEMBLYLOADCONTEXT__RESOLVEUSINGEVENT);
-                
-            // Setup the arguments for the call
-            ARG_SLOT args[2] =
-            {
-                PtrToArgSlot(pManagedAssemblyLoadContextToBindWithin), // IntPtr for managed assembly load context instance
-                ObjToArgSlot(_gcRefs.oRefAssemblyName), // AssemblyName instance
-            };
+        //if (!fResolvedAssembly && isSatelliteAssemblyRequest)
+        //{
+        //    // Step 4 (of CLRPrivBinderAssemblyLoadContext::BindUsingAssemblyName)
+        //    //
+        //    // Attempt to resolve it using the ResolveSatelliteAssembly method.
+        //    // Finally, setup arguments for invocation
+        //    MethodDescCallSite methResolveSatelitteAssembly(METHOD__ASSEMBLYLOADCONTEXT__RESOLVESATELLITEASSEMBLY);
 
-            // Make the call
-            _gcRefs.oRefLoadedAssembly = (ASSEMBLYREF) methResolveUsingEvent.Call_RetOBJECTREF(args);
-            if (_gcRefs.oRefLoadedAssembly != NULL)
-            {
-                // Set the flag indicating we found the assembly
-                fResolvedAssembly = true;
-            }
-        }
+        //    // Setup the arguments for the call
+        //    ARG_SLOT args[2] =
+        //    {
+        //        PtrToArgSlot(pManagedAssemblyLoadContextToBindWithin), // IntPtr for managed assembly load context instance
+        //        ObjToArgSlot(_gcRefs.oRefAssemblyName), // AssemblyName instance
+        //    };
+
+        //    // Make the call
+        //    _gcRefs.oRefLoadedAssembly = (ASSEMBLYREF) methResolveSatelitteAssembly.Call_RetOBJECTREF(args);
+        //    if (_gcRefs.oRefLoadedAssembly != NULL)
+        //    {
+        //        // Set the flag indicating we found the assembly
+        //        fResolvedAssembly = true;
+        //    }
+        //}
+
+        //if (!fResolvedAssembly)
+        //{
+        //    // Step 5 (of CLRPrivBinderAssemblyLoadContext::BindUsingAssemblyName)
+        //    //
+        //    // If we couldn't resolve the assembly using TPA LoadContext as well, then
+        //    // attempt to resolve it using the Resolving event.
+        //    // Finally, setup arguments for invocation
+        //    MethodDescCallSite methResolveUsingEvent(METHOD__ASSEMBLYLOADCONTEXT__RESOLVEUSINGEVENT);
+        //        
+        //    // Setup the arguments for the call
+        //    ARG_SLOT args[2] =
+        //    {
+        //        PtrToArgSlot(pManagedAssemblyLoadContextToBindWithin), // IntPtr for managed assembly load context instance
+        //        ObjToArgSlot(_gcRefs.oRefAssemblyName), // AssemblyName instance
+        //    };
+
+        //    // Make the call
+        //    _gcRefs.oRefLoadedAssembly = (ASSEMBLYREF) methResolveUsingEvent.Call_RetOBJECTREF(args);
+        //    if (_gcRefs.oRefLoadedAssembly != NULL)
+        //    {
+        //        // Set the flag indicating we found the assembly
+        //        fResolvedAssembly = true;
+        //    }
+        //}
             
         if (fResolvedAssembly && pResolvedAssembly == NULL)
         {

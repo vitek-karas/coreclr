@@ -516,6 +516,7 @@ FCFuncStart(gAssemblyLoadContextFuncs)
 #ifndef FEATURE_PAL
     QCFuncElement("LoadFromInMemoryModuleInternal", AssemblyNative::LoadFromInMemoryModule)
 #endif
+    QCFuncElement("BindUsingDefaultContext", AppDomain::BindUsingDefaultContext)
     QCFuncElement("GetLoadContextForAssembly", AssemblyNative::GetLoadContextForAssembly)
     FCFuncElement("GetLoadedAssemblies", AppDomainNative::GetLoadedAssemblies)
 #if defined(FEATURE_MULTICOREJIT)

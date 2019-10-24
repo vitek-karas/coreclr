@@ -555,11 +555,33 @@ namespace System.Runtime.Loader
 #if !CORERT
         // This method is invoked by the VM when using the host-provided assembly load context
         // implementation.
-        private static Assembly? Resolve(IntPtr gchManagedAssemblyLoadContext, AssemblyName assemblyName)
+        private static Assembly? Resolve(
+            IntPtr gchManagedAssemblyLoadContext,
+            AssemblyName assemblyName,
+            IntPtr defaultBindContext)
         {
             AssemblyLoadContext context = (AssemblyLoadContext)(GCHandle.FromIntPtr(gchManagedAssemblyLoadContext).Target)!;
 
-            return context.ResolveUsingLoad(assemblyName);
+            Assembly? resolvedAssembly = context.ResolveUsingLoad(assemblyName);
+            if (resolvedAssembly != null)
+            {
+                return resolvedAssembly;
+            }
+
+            if (BindUsingDefaultContext(defaultBindContext))
+            {
+                return null;
+            }
+
+            if (!string.IsNullOrEmpty(assemblyName.CultureName))
+            {
+                if ((resolvedAssembly = context.ResolveSatelliteAssembly(assemblyName)) != null)
+                {
+                    return resolvedAssembly;
+                }
+            }
+
+            return context.ResolveUsingEvent(assemblyName);
         }
 
         // This method is invoked by the VM to resolve an assembly reference using the Resolving event

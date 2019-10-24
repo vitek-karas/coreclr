@@ -1708,6 +1708,7 @@ public:
     MethodTable *GetRedirectedType(WinMDAdapter::RedirectedTypeIndex index);
 #endif // FEATURE_COMINTEROP
 
+    static BOOL QCALLTYPE BindUsingDefaultContext(INT_PTR pDefaultBindContext);
 
     //****************************************************************************************
 
